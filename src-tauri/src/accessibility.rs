@@ -35,6 +35,7 @@ unsafe extern "C" {
         parameter: CFTypeRef,
         value: *mut CFTypeRef,
     ) -> AXError;
+    fn AXUIElementSetAttributeValue(element: AXUIElementRef, attribute: CFStringRef, value: CFTypeRef) -> AXError;
     fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
     static kAXTrustedCheckOptionPrompt: CFStringRef;
 }
@@ -118,6 +119,25 @@ impl Element {
         let v = self.attr(name)?;
         cf_to_string(&v).ok_or(AxError::NoSelection)
     }
+
+    fn bool_attr(&self, name: &str) -> Option<bool> {
+        let v = self.attr(name).ok()?;
+        unsafe {
+            if CFGetTypeID(v.as_CFTypeRef()) == CFBoolean::type_id() {
+                let b = CFBoolean::wrap_under_get_rule(v.as_CFTypeRef() as _);
+                Some(b.into())
+            } else {
+                None
+            }
+        }
+    }
+
+    fn set_bool_attr(&self, name: &str, value: bool) -> bool {
+        let attr = CFString::new(name);
+        let v = if value { CFBoolean::true_value() } else { CFBoolean::false_value() };
+        let err = unsafe { AXUIElementSetAttributeValue(self.0, attr.as_concrete_TypeRef(), v.as_CFTypeRef()) };
+        err == K_AX_ERROR_SUCCESS
+    }
 }
 
 fn cf_to_string(v: &CFType) -> Option<String> {
@@ -150,37 +170,102 @@ pub struct Selection {
 }
 
 /// Read the current selection from whatever element has focus, without activating anything.
+///
+/// Browsers (Chromium, Gecko) and Electron apps build their accessibility tree lazily: until an
+/// assistive tool announces itself, the web area reports no selection at all. Native text views
+/// answer immediately, so we try once, and only then flip `AXEnhancedUserInterface` on the
+/// frontmost app, wait for the tree, retry, and put the flag back the way we found it.
 pub fn selected_text() -> Result<Selection, AxError> {
     if !is_trusted(false) {
         return Err(AxError::NotTrusted);
     }
     let system = Element::system_wide();
-    let app_name = system
-        .child("AXFocusedApplication")
-        .ok()
-        .and_then(|app| app.string_attr("AXTitle").ok());
-    let focused = system.child("AXFocusedUIElement").map_err(|e| match e {
+    let app = system.child("AXFocusedApplication").ok();
+    let app_name = app.as_ref().and_then(|a| a.string_attr("AXTitle").ok());
+
+    match capture_once(&system, app.as_ref()) {
+        Ok(text) => {
+            log::debug!("selection: direct");
+            return Ok(Selection { text, app_name });
+        }
+        Err(AxError::NoFocusedElement) if app.is_none() => return Err(AxError::NoFocusedElement),
+        Err(_) => {}
+    }
+
+    let Some(app) = app else { return Err(AxError::NoSelection) };
+    let was_enhanced = app.bool_attr("AXEnhancedUserInterface").unwrap_or(false);
+    let was_manual = app.bool_attr("AXManualAccessibility").unwrap_or(false);
+    // Gecko honors AXEnhancedUserInterface; Chromium honors both (AXManualAccessibility is its own
+    // switch that avoids the window-animation side effects of the enhanced flag).
+    app.set_bool_attr("AXManualAccessibility", true);
+    app.set_bool_attr("AXEnhancedUserInterface", true);
+    let mut result = Err(AxError::NoSelection);
+    for (i, delay_ms) in [40u64, 80, 150, 250].into_iter().enumerate() {
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        match capture_once(&system, Some(&app)) {
+            Ok(text) => {
+                log::debug!("selection: after enabling browser accessibility (attempt {})", i + 1);
+                result = Ok(Selection { text, app_name: app_name.clone() });
+                break;
+            }
+            Err(e) => result = Err(e),
+        }
+    }
+    if !was_enhanced {
+        app.set_bool_attr("AXEnhancedUserInterface", false);
+    }
+    if !was_manual {
+        app.set_bool_attr("AXManualAccessibility", false);
+    }
+    result
+}
+
+/// One capture attempt: focused element's selected text, then the range path, then the
+/// focused window's web area (Gecko sometimes focuses a container rather than the document).
+fn capture_once(system: &Element, app: Option<&Element>) -> Result<String, AxError> {
+    let focused = match app {
+        Some(a) => a.child("AXFocusedUIElement").or_else(|_| system.child("AXFocusedUIElement")),
+        None => system.child("AXFocusedUIElement"),
+    }
+    .map_err(|e| match e {
         AxError::NoSelection => AxError::NoFocusedElement,
         other => other,
     })?;
+    if let Some(t) = selection_of(&focused) {
+        return Ok(t);
+    }
+    // Walk up a few levels: a focused link or button inside a selected paragraph won't carry the
+    // selection, but the web area above it does.
+    let mut el = focused;
+    for _ in 0..6 {
+        let Ok(parent) = el.child("AXParent") else { break };
+        if let Some(t) = selection_of(&parent) {
+            return Ok(t);
+        }
+        if parent.string_attr("AXRole").map(|r| r == "AXWindow").unwrap_or(false) {
+            break;
+        }
+        el = parent;
+    }
+    Err(AxError::NoSelection)
+}
 
-    // 1. Direct selected text (works in most Cocoa text views, WebKit, Chromium, Gecko).
-    if let Ok(text) = focused.string_attr("AXSelectedText") {
+fn selection_of(el: &Element) -> Option<String> {
+    if let Ok(text) = el.string_attr("AXSelectedText") {
         if !text.trim().is_empty() {
-            return Ok(Selection { text, app_name });
+            return Some(text);
         }
     }
-    // 2. Range + parameterized string (some editors only implement this path).
-    if let Ok(range) = focused.attr("AXSelectedTextRange") {
-        if let Ok(v) = focused.param_attr("AXStringForRange", &range) {
+    if let Ok(range) = el.attr("AXSelectedTextRange") {
+        if let Ok(v) = el.param_attr("AXStringForRange", &range) {
             if let Some(text) = cf_to_string(&v) {
                 if !text.trim().is_empty() {
-                    return Ok(Selection { text, app_name });
+                    return Some(text);
                 }
             }
         }
     }
-    Err(AxError::NoSelection)
+    None
 }
 
 /// Deep link into System Settings → Privacy & Security → Accessibility.
