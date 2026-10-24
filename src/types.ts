@@ -51,6 +51,7 @@ export interface ProfileCard {
   devOnly: boolean;
   languages: string[];
   recommended: boolean;
+  license: string;
 }
 
 export interface Settings {
@@ -82,6 +83,14 @@ export interface SystemInfo {
   recommendedProfile: string;
   appVersion: string;
   dataDir: string;
+}
+
+export interface CliStatus {
+  bundled: string | null;
+  link: string;
+  installed: boolean;
+  inPath: boolean;
+  socket: string;
 }
 
 export interface ReaderText {

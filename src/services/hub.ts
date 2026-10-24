@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type {
-  HotkeyStatus, ProfileCard, ReaderText, Settings, SpeakOptions, Status, SystemInfo, VoiceInfo, WindowLabel,
+  CliStatus, HotkeyStatus, ProfileCard, ReaderText, Settings, SpeakOptions, Status, SystemInfo, VoiceInfo, WindowLabel,
 } from "../types";
 
 export const hub = {
@@ -30,6 +30,9 @@ export const hub = {
   hotkeysApply: () => invoke<HotkeyStatus[]>("hotkeys_apply"),
 
   openWindow: (label: WindowLabel, pane?: string) => invoke<void>("open_window", { label, pane }),
+  cliStatus: () => invoke<CliStatus>("cli_status"),
+  cliInstall: () => invoke<CliStatus>("cli_install"),
+  cliUninstall: () => invoke<CliStatus>("cli_uninstall"),
   hideWindow: (label: WindowLabel) => invoke<void>("hide_window", { label }),
   systemInfo: () => invoke<SystemInfo>("system_info"),
 };

@@ -2,7 +2,7 @@
 
 > Give anything on your Mac a voice. One local speech engine, shared by every app, script, and shortcut.
 
-Status: **building M1**. Decisions in §2 are final (2026-10-24). This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
+Status: **M1–M3 built, M4 in progress** (2026-10-24). Decisions in §2 are final. See `docs/perf.md` for measured numbers. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
 
 ---
 
@@ -46,8 +46,8 @@ Status: **building M1**. Decisions in §2 are final (2026-10-24). This document 
 | 2 | CLI binary | **`speak`** |
 | 3 | URL scheme | `speechhub://` |
 | 4 | Bundle id | `com.jeremym.speechhub` |
-| 5 | License | **GPL-3.0-or-later** for the whole project. Reason: both bundled engines (Piper and Kokoro via sherpa-onnx) phonemize through espeak-ng (GPLv3), so the shipped binary is GPL-covered regardless. One license, no dual notice. Integrators talk to us over a process boundary (CLI/socket), so GPL never reaches their code. Reversible only while the contributor list is short. |
-| 6 | Models | **Bundle Lite + Standard.** Plus (Pocket TTS) is download-on-demand. |
+| 5 | License | **GPL-3.0-or-later** for the whole project. Reason: phonemization goes through piper-phonemize/espeak-ng (GPLv3), so the shipped binary is GPL-covered regardless. (sherpa-onnx 2.0 itself dropped espeak-ng on 2026-10-20; we link the phonemizer separately because its lexicon-only fallback silently *skips* out-of-vocabulary words, which is unacceptable for technical text.) One license, no dual notice. Integrators talk to us over a process boundary. Reversible later by swapping the phonemizer behind its trait. |
+| 6 | Models | **Bundle Lite + Standard.** Standard = Kokoro-82M **fp32** (337 MB; int8 measured 3× slower on Apple Silicon). Lite = three Piper medium-int8 voices (53 MB). Plus (Pocket TTS int8, 98 MB download) is download-on-demand. |
 | 7 | First launch | **Mandatory wizard**, every pane is a reused Preferences pane: Welcome → Accessibility permission → Model picker (Handy-style: name, size, quality/speed badges, bundled vs download) → Voice preview → Hotkeys (with Apple Speak Selection conflict check) → optional CLI install → Done. |
 | 8 | Default profile | Standard on Apple Silicon; wizard pre-selects Lite on Intel or low memory; always overridable. |
 | 9 | Settings | JSON in `~/Library/Application Support/Speech Hub/` |
@@ -87,13 +87,13 @@ Status: **building M1**. Decisions in §2 are final (2026-10-24). This document 
 
 ## 4. Engine profiles (the "runs on anything" answer)
 
-| Profile | Model | Size on disk | RAM (est.) | First audio (est., M1) | Notes |
+| Profile | Model | Size on disk | RSS (measured) | First audio (M3 Ultra) | Notes |
 |---|---|---|---|---|---|
-| **Lite** | Piper / VITS single-speaker via sherpa-onnx | 20–60 MB | <150 MB | <200 ms | Robotic-ish but clear. Works on Intel. Bundled. |
-| **Standard** | Kokoro-82M, int8 ONNX, ~50 voices | ~90 MB + 27 MB voices | ~300–400 MB | ~0.5–1 s per first sentence | Default on Apple Silicon. Bundled. |
-| **Plus** | Pocket TTS (Kyutai) | ~200 MB | TBD | TBD | Voice cloning. CC-BY-4.0, gated upstream. **Download on demand, with consent screen.** Not bundled. |
+| **Lite** | Piper VITS medium int8: Amy, Ryan, Lessac | 53 MB | 85 MB idle / 247 MB peak | 380 ms | Bundled. Intel-friendly. |
+| **Standard** | Kokoro-82M v1.0 fp32, 54 voices | 337 MB | 563 MB idle / 729 MB peak | 340 ms | Bundled. Default on Apple Silicon. |
+| **Plus** | Pocket TTS int8 (Kyutai) | 194 MB installed | TBD | ~260 ms (spike) | Voice cloning. CC-BY-4.0, gated upstream. **Download on demand, with license + consent screen.** |
 
-*All estimates must be replaced by measured numbers before release (cold start, warm start, first audible, RTF, RSS, app size).*
+*Numbers from `docs/perf.md`; re-measure on an M1 8 GB before release.*
 
 Rules:
 - One `Engine` trait: `load / unload / voices / capabilities / synthesize(chunk, voice, speed, cancel_token) / metadata`.
@@ -198,12 +198,12 @@ Signing + notarization · DMG · GitHub Actions (build + Rust/Vitest tests; nati
 | Risk | Impact | Mitigation |
 |---|---|---|
 | espeak-ng GPL via sherpa-onnx | License of distributed binary | Decide in §2; notice in docs; track phonemizer alternatives |
-| sherpa-onnx dylib bundling + codesign in Tauri | Release blocker | Prove in M2 with a signed build, not M7 |
+| ~~sherpa-onnx dylib bundling~~ | — | Resolved: sherpa-onnx 2.0 and piper-phonemize link statically; the binary has no third-party dylibs. |
 | AX selection unavailable in some apps | Core UX failure | Clear error + fallback Source hook; document app matrix |
 | Option+Escape owned by macOS Speak Selection | Hotkey conflict | Detect at registration; onboarding tells user to disable Apple's |
 | Kokoro int8 quality regression vs fp32 | Voice quality | A/B in M2; ship fp16 if int8 is audibly worse and size allows |
 | Pocket TTS gating / terms | Can't ship cloning | Download-on-demand only; feature is optional by design |
-| 8 GB Macs under memory pressure | Swapping, slow | Lite profile, idle unload, single resident model |
+| 8 GB Macs under memory pressure | Swapping, slow | Standard holds ~560 MB RSS. Lite profile, idle unload, single resident model; wizard recommends Lite under 8 GB. |
 | `shortcuts run` output quirks | Shortcut Source flaky | Verify early in M4; document the "return text" recipe |
 
 ---

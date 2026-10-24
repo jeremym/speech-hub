@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.jeremym.speechhub",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "scripts/build-cli.sh && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "scripts/build-cli.sh && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -17,7 +17,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "category": "Utility",
     "shortDescription": "Give anything on your Mac a voice.",
     "longDescription": "Speech Hub is a local, private AI text-to-speech utility that any app, script, or Shortcut can speak through.",
@@ -27,9 +30,24 @@
       "icons/128x128@2x.png",
       "icons/icon.icns"
     ],
-    "resources": ["resources/models/**/*"],
+    "resources": [
+      "resources/models/lite/**/*",
+      "resources/models/standard/**/*"
+    ],
     "macOS": {
       "minimumSystemVersion": "13.0"
+    },
+    "externalBin": [
+      "binaries/speak"
+    ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "speechhub"
+        ]
+      }
     }
   }
 }

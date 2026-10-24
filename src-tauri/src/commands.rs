@@ -125,7 +125,7 @@ pub fn hub_preview_voice(app: AppHandle, voice_id: String) -> R<String> {
 #[tauri::command]
 pub fn hub_engines(app: AppHandle) -> Vec<engines::ProfileCard> {
     let hub = hub::get(&app);
-    engines::catalog(hub.models_dir(), &recommended_profile())
+    engines::catalog(hub.roots(), &recommended_profile())
 }
 
 #[tauri::command]
@@ -224,4 +224,88 @@ pub fn system_info(app: AppHandle) -> SystemInfo {
         app_version: app.package_info().version.to_string(),
         data_dir: app.path().app_data_dir().map(|p| p.display().to_string()).unwrap_or_default(),
     }
+}
+
+// ---------- command line tool ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliStatus {
+    /// Path of the `speak` binary shipped inside the app.
+    pub bundled: Option<String>,
+    /// Where the symlink goes.
+    pub link: String,
+    pub installed: bool,
+    /// Does the login shell's PATH include the link directory?
+    pub in_path: bool,
+    pub socket: String,
+}
+
+fn bundled_cli() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let direct = dir.join("speak");
+    if direct.exists() {
+        return Some(direct);
+    }
+    // `tauri dev` runs the unbundled binary; the sidecar sits next to the sources.
+    let triple = format!("speak-{}-apple-darwin", std::env::consts::ARCH);
+    let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries").join(triple);
+    dev.exists().then_some(dev)
+}
+
+fn cli_link_path() -> std::path::PathBuf {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(|| "/tmp".into());
+    home.join(".local").join("bin").join("speak")
+}
+
+fn login_shell_path_contains(dir: &std::path::Path) -> bool {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    let out = std::process::Command::new(shell).args(["-lc", "printf %s \"$PATH\""]).output();
+    let path = out.ok().and_then(|o| String::from_utf8(o.stdout).ok()).unwrap_or_default();
+    let want = dir.display().to_string();
+    let home = std::env::var("HOME").unwrap_or_default();
+    path.split(':').any(|p| p == want || p.replacen('~', &home, 1) == want)
+}
+
+#[tauri::command]
+pub fn cli_status(app: AppHandle) -> CliStatus {
+    let link = cli_link_path();
+    let installed = std::fs::read_link(&link).map(|t| t.exists()).unwrap_or(false);
+    let socket = app.path().app_data_dir().map(|d| d.join("run/hub.sock").display().to_string()).unwrap_or_default();
+    CliStatus {
+        bundled: bundled_cli().map(|p| p.display().to_string()),
+        in_path: login_shell_path_contains(link.parent().unwrap()),
+        link: link.display().to_string(),
+        installed,
+        socket,
+    }
+}
+
+/// Symlink ~/.local/bin/speak → the bundled binary. No sudo, no copying (updates stay in sync).
+#[tauri::command]
+pub fn cli_install(app: AppHandle) -> R<CliStatus> {
+    let target = bundled_cli().ok_or_else(|| "the speak binary is not bundled with this build".to_string())?;
+    let link = cli_link_path();
+    if let Some(dir) = link.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    match std::fs::symlink_metadata(&link) {
+        Ok(m) if m.file_type().is_symlink() => std::fs::remove_file(&link).map_err(|e| e.to_string())?,
+        Ok(_) => return Err(format!("{} exists and is not a symlink; remove it first", link.display()).into()),
+        Err(_) => {}
+    }
+    std::os::unix::fs::symlink(&target, &link).map_err(|e| e.to_string())?;
+    Ok(cli_status(app))
+}
+
+#[tauri::command]
+pub fn cli_uninstall(app: AppHandle) -> R<CliStatus> {
+    let link = cli_link_path();
+    if let Ok(m) = std::fs::symlink_metadata(&link) {
+        if m.file_type().is_symlink() {
+            std::fs::remove_file(&link).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(cli_status(app))
 }

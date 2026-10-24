@@ -63,9 +63,19 @@ fn position_player(app: &AppHandle, window: &tauri::WebviewWindow) {
     }
 }
 
+/// Run on the main thread (window creation is main-thread-only on macOS). Callers may be on
+/// hotkey, IPC, or synthesis threads.
+fn on_main(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
+    let handle = app.clone();
+    if let Err(e) = app.run_on_main_thread(move || f(&handle)) {
+        log::error!("run_on_main_thread: {e}");
+    }
+}
+
 /// Show and focus a regular window.
 pub fn show(app: &AppHandle, label: &str) {
-    match ensure(app, label) {
+    let label = label.to_string();
+    on_main(app, move |app| match ensure(app, &label) {
         Ok(w) => {
             let _ = w.show();
             let _ = w.unminimize();
@@ -73,19 +83,19 @@ pub fn show(app: &AppHandle, label: &str) {
             let _ = app.emit("window:shown", label);
         }
         Err(e) => log::error!("cannot open window {label}: {e}"),
-    }
+    });
 }
 
 /// Show the mini player without stealing focus.
 pub fn show_player(app: &AppHandle) {
     cancel_player_hide();
-    match ensure(app, PLAYER) {
+    on_main(app, |app| match ensure(app, PLAYER) {
         Ok(w) => {
             position_player(app, &w);
             let _ = w.show();
         }
         Err(e) => log::error!("cannot open player: {e}"),
-    }
+    });
 }
 
 pub fn hide(app: &AppHandle, label: &str) {

@@ -30,9 +30,13 @@ uuid = { version = "1", features = ["v4"] }
 cpal = "0.18"
 hound = "3"
 core-foundation = "0.10"
+sherpa-onnx = "2"
+piper-phonemize = "1"
+libc = "0.2"
+tauri-plugin-deep-link = "2"
 
 [features]
-default = ["dev-say"]
+default = []
 # Dev-only placeholder engine that renders speech with macOS `say` into PCM.
 # Exercises the real segment -> synth -> playback pipeline before sherpa-onnx lands (M2).
 # Must be OFF in release builds once a real engine exists.

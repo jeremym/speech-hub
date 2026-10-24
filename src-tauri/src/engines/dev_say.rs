@@ -7,7 +7,7 @@ use speechhub_protocol::{EngineInfo, VoiceInfo};
 use std::{
     io::Write,
     process::{Command, Stdio},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, atomic::{AtomicBool, Ordering}},
     time::Duration,
 };
 
@@ -72,7 +72,7 @@ impl Engine for DevSayEngine {
         self.voices.first().map(|v| v.id.clone()).unwrap_or_default()
     }
 
-    fn synthesize(&self, text: &str, voice_id: &str, speed: f32, cancel: &AtomicBool) -> Result<Pcm, EngineError> {
+    fn synthesize(&self, text: &str, voice_id: &str, speed: f32, cancel: &Arc<AtomicBool>) -> Result<Pcm, EngineError> {
         if cancel.load(Ordering::Relaxed) {
             return Err(EngineError::Cancelled);
         }
@@ -150,7 +150,7 @@ mod tests {
         let engine = DevSayEngine::new();
         assert!(!engine.voices().is_empty(), "say -v ? returned no voices");
         let voice = engine.default_voice();
-        let cancel = AtomicBool::new(false);
+        let cancel = Arc::new(AtomicBool::new(false));
         let pcm = engine.synthesize("Hello from Speech Hub.", &voice, 1.0, &cancel).expect("synthesis");
         assert_eq!(pcm.rate, 22050);
         assert!(pcm.samples.len() > 22050 / 4, "got {} samples", pcm.samples.len());
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn cancel_is_honoured() {
         let engine = DevSayEngine::new();
-        let cancel = AtomicBool::new(true);
+        let cancel = Arc::new(AtomicBool::new(true));
         assert!(matches!(engine.synthesize("x", "", 1.0, &cancel), Err(EngineError::Cancelled)));
     }
 }

@@ -2,12 +2,15 @@
 
 mod accessibility;
 mod commands;
-mod engines;
+mod deeplink;
+pub mod engines;
 mod hotkeys;
 mod hub;
+mod ipc;
 mod playback;
 mod settings;
-mod text;
+mod sources;
+pub mod text;
 mod tray;
 mod windows;
 
@@ -25,6 +28,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -34,17 +38,19 @@ pub fn run() {
             let settings = settings::SettingsStore::load(&data_dir);
             app.manage(settings.clone());
 
-            let models_dir = app
-                .path()
-                .resource_dir()
-                .map(|r| r.join("resources").join("models"))
-                .unwrap_or_else(|_| data_dir.join("models"));
-            let hub = hub::Hub::new(app.handle().clone(), settings.clone(), models_dir)
+            let bundled = app.path().resource_dir().ok().map(|r| r.join("resources").join("models"));
+            let roots = engines::ModelRoots::new(bundled, data_dir.join("models"));
+            log::info!("model roots: {:?}", roots.roots);
+            let hub = hub::Hub::new(app.handle().clone(), settings.clone(), roots)
                 .map_err(|e| std::io::Error::other(e))?;
             app.manage(hub);
 
             tray::build(app.handle())?;
             hotkeys::apply(app.handle(), &settings.get());
+            if let Err(e) = ipc::start(app.handle().clone(), &data_dir) {
+                log::error!("ipc server failed to start: {e}");
+            }
+            deeplink::install(app.handle());
 
             if !settings.get().onboarding_complete {
                 windows::show(app.handle(), windows::ONBOARDING);
@@ -83,6 +89,9 @@ pub fn run() {
             commands::open_window,
             commands::hide_window,
             commands::system_info,
+            commands::cli_status,
+            commands::cli_install,
+            commands::cli_uninstall,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Speech Hub");

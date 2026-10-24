@@ -2,12 +2,11 @@
 //! request → validate → normalize → (pronunciation, M5) → segment → engine → player.
 
 use crate::{
-    accessibility, engines::{self, Engine, EngineError}, playback::Player, settings::{RepeatBehavior, SettingsStore},
+    accessibility, engines::{self, Engine, EngineError, ModelRoots}, playback::Player, settings::{RepeatBehavior, SettingsStore},
     text, windows,
 };
 use speechhub_protocol::{EngineInfo, ErrorCode, HubState, Progress, SpeakOptions, Status, VoiceInfo};
 use std::{
-    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -45,7 +44,15 @@ impl HubError {
 
 struct Job {
     id: String,
-    cancel: AtomicBool,
+    cancel: Arc<AtomicBool>,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct RenderInfo {
+    pub path: String,
+    pub seconds: f32,
+    pub sample_rate: u32,
+    pub voice_id: String,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -58,7 +65,7 @@ pub struct ReaderText {
 struct Inner {
     app: AppHandle,
     settings: SettingsStore,
-    models_dir: PathBuf,
+    roots: ModelRoots,
     player: Player,
     engine: Mutex<Option<Arc<dyn Engine>>>,
     status: Mutex<Status>,
@@ -73,14 +80,14 @@ pub struct Hub {
 }
 
 impl Hub {
-    pub fn new(app: AppHandle, settings: SettingsStore, models_dir: PathBuf) -> Result<Self, String> {
+    pub fn new(app: AppHandle, settings: SettingsStore, roots: ModelRoots) -> Result<Self, String> {
         let player = Player::new().map_err(|e| e.to_string())?;
         let s = settings.get();
         let hub = Hub {
             inner: Arc::new(Inner {
                 app,
                 settings,
-                models_dir,
+                roots,
                 player,
                 engine: Mutex::new(None),
                 status: Mutex::new(Status {
@@ -112,7 +119,7 @@ impl Hub {
         let profile = profile.to_string();
         std::thread::Builder::new()
             .name("speechhub-engine-load".into())
-            .spawn(move || match engines::create(&profile, &hub.inner.models_dir) {
+            .spawn(move || match engines::create(&profile, &hub.inner.roots) {
                 Ok((engine, actual_id)) => {
                     let engine: Arc<dyn Engine> = Arc::from(engine);
                     let info = engine.info();
@@ -150,8 +157,8 @@ impl Hub {
         self.inner.engine.lock().unwrap().as_ref().map(|e| e.voices()).unwrap_or_default()
     }
 
-    pub fn models_dir(&self) -> &PathBuf {
-        &self.inner.models_dir
+    pub fn roots(&self) -> &ModelRoots {
+        &self.inner.roots
     }
 
     pub fn set_voice(&self, voice_id: &str) {
@@ -189,7 +196,7 @@ impl Hub {
         self.cancel_current();
         self.inner.player.resume();
 
-        let job = Arc::new(Job { id: uuid::Uuid::new_v4().to_string(), cancel: AtomicBool::new(false) });
+        let job = Arc::new(Job { id: uuid::Uuid::new_v4().to_string(), cancel: Arc::new(AtomicBool::new(false)) });
         *self.inner.job.lock().unwrap() = Some(job.clone());
         *self.inner.last_activity.lock().unwrap() = Instant::now();
 
@@ -398,6 +405,40 @@ impl Hub {
             });
             windows::schedule_hide_player(&hub.inner.app, Duration::from_millis(100));
         });
+    }
+
+    /// Synthesize to a 16-bit WAV file without playing. Blocks the caller (IPC thread).
+    pub fn render(&self, text: &str, options: SpeakOptions, path: &std::path::Path) -> Result<RenderInfo, HubError> {
+        let chunks = text::segment(text);
+        if chunks.is_empty() {
+            return Err(HubError::Invalid("nothing to render".into()));
+        }
+        let engine = self.engine()?;
+        let (voice, speed) = {
+            let st = self.inner.status.lock().unwrap();
+            (
+                options.voice_id.clone().filter(|v| !v.is_empty()).unwrap_or_else(|| st.voice_id.clone()),
+                options.speed.unwrap_or(st.speed),
+            )
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut rate = 0u32;
+        let mut samples: Vec<f32> = Vec::new();
+        for chunk in &chunks {
+            let pcm = engine.synthesize(chunk, &voice, speed, &cancel)?;
+            if rate == 0 {
+                rate = pcm.rate;
+            }
+            samples.extend_from_slice(&pcm.samples);
+        }
+        let spec = hound::WavSpec { channels: 1, sample_rate: rate, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut w = hound::WavWriter::create(path, spec).map_err(|e| HubError::Invalid(format!("cannot write {}: {e}", path.display())))?;
+        for s in &samples {
+            let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+            w.write_sample(v).map_err(|e| HubError::Invalid(e.to_string()))?;
+        }
+        w.finalize().map_err(|e| HubError::Invalid(e.to_string()))?;
+        Ok(RenderInfo { path: path.display().to_string(), seconds: samples.len() as f32 / rate.max(1) as f32, sample_rate: rate, voice_id: voice })
     }
 
     pub fn preview_voice(&self, voice_id: &str) -> Result<String, HubError> {

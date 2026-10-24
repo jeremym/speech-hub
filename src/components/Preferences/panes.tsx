@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { hub, useHubStatus, useSettings, useVoices, errorMessage, STATE_LABEL } from "../../services/hub";
 import { eventToShortcut, formatShortcut } from "../../lib/shortcut";
-import type { HotkeyStatus, ProfileCard, Settings, SystemInfo } from "../../types";
+import type { CliStatus, HotkeyStatus, ProfileCard, Settings, SystemInfo } from "../../types";
 import { Badge, Button, Card, Dots, Field, H1, Lead, Select, Toggle } from "../ui";
 
 type PaneProps = { wizard?: boolean };
@@ -86,6 +86,7 @@ export function EnginePane({ wizard }: PaneProps) {
                     <span>{c.sizeLabel}</span>
                     <span>RAM {c.ramLabel}</span>
                     <span>{c.languages.join(", ")}</span>
+                    <span>{c.license}</span>
                   </div>
                 </div>
                 <input type="radio" readOnly checked={isSelected} disabled={!c.installed} className="mt-1 accent-[var(--accent)]" aria-label={`Use ${c.name}`} />
@@ -224,25 +225,53 @@ export function GeneralPane(_: PaneProps) {
   );
 }
 
-// ---------------------------------------------------------------- Command line (M3)
+// ---------------------------------------------------------------- Command line
 
 export function CliPane({ wizard }: PaneProps) {
+  const [st, setSt] = useState<CliStatus | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const refresh = () => hub.cliStatus().then(setSt).catch((e) => setErr(errorMessage(e)));
+  useEffect(() => { refresh(); }, []);
+  const act = (p: Promise<CliStatus>) => { setErr(null); p.then(setSt).catch((e) => setErr(errorMessage(e))); };
   return (
     <div>
       <H1>Command line tool</H1>
-      <Lead>Any script or app can speak through Speech Hub with the <code>speak</code> command. It arrives in Milestone 3 and will install into <code>~/.local/bin</code> without a password.</Lead>
+      <Lead>Any script or app can speak through Speech Hub with the <code>speak</code> command. It talks to this running app over a private socket, so nothing else loads a model.</Lead>
       <Card>
-        <pre className="text-[13px] leading-6 overflow-auto select-text">{`echo "Hello" | speak            # speak now
-speak -f notes.md               # speak a file
-pbpaste | speak --open          # open in the Reader
-speak run morning-briefing      # run a saved Source
+        <pre className="text-[13px] leading-6 overflow-auto select-text">{`echo "Build finished" | speak      # speak now
+speak -f notes.md                   # speak a file
+pbpaste | speak --open              # open in the Reader
+speak -v bm_george "Cheers"         # pick a voice
+speak -o out.wav "Render me"        # write a WAV, no playback
+speak run morning-briefing          # run a saved Source
 speak stop`}</pre>
       </Card>
-      <div className="mt-4 flex items-center gap-3">
-        <Button variant="primary" disabled>Install command line tool</Button>
-        <span className="text-[13px] text-[var(--muted)]">Available in Milestone 3.</span>
-      </div>
-      {wizard && <p className="text-[13px] text-[var(--muted)] mt-4">Optional. The app works without it.</p>}
+      <Card className="mt-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="font-medium flex items-center gap-2">
+              Status {st === null ? <Badge>Checking…</Badge> : st.installed ? <Badge tone="ok">Installed</Badge> : <Badge>Not installed</Badge>}
+              {st?.installed && !st.inPath && <Badge tone="warn">Not on PATH</Badge>}
+            </div>
+            <div className="text-[13px] text-[var(--muted)] mt-1 break-all select-text">
+              {st?.installed ? <>Linked at <code>{st.link}</code></> : <>Installs a link at <code>{st?.link ?? "~/.local/bin/speak"}</code>. No password needed.</>}
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            {st?.installed
+              ? <Button onClick={() => act(hub.cliUninstall())}>Remove</Button>
+              : <Button variant="primary" disabled={!st?.bundled} onClick={() => act(hub.cliInstall())}>Install</Button>}
+          </div>
+        </div>
+        {st && !st.bundled && <p className="text-[13px] text-[var(--danger)] mt-2">This build has no bundled <code>speak</code> binary. Run <code>scripts/build-cli.sh</code>.</p>}
+        {st?.installed && !st.inPath && (
+          <p className="text-[13px] text-[var(--muted)] mt-3">Your shell doesn't look in <code>~/.local/bin</code> yet. Add this to <code>~/.zshrc</code>, then open a new terminal:
+            <pre className="mt-1 select-text">export PATH="$HOME/.local/bin:$PATH"</pre></p>
+        )}
+        {err && <p className="text-[13px] text-[var(--danger)] mt-2">{err}</p>}
+      </Card>
+      <p className="text-[13px] text-[var(--muted)] mt-4">Developers: the same socket protocol is documented in <code>docs/public-api.md</code>. Links like <code>speechhub://palette</code> also work.</p>
+      {wizard && <p className="text-[13px] text-[var(--muted)] mt-1">Optional. The app works without it.</p>}
     </div>
   );
 }

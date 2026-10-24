@@ -7,9 +7,11 @@ src-tauri/gen/
 
 # models are fetched by scripts/fetch-models.sh, never committed
 src-tauri/resources/models/*
+.cache/
 !src-tauri/resources/models/.gitkeep
 !src-tauri/resources/models/MANIFEST.json
 
 # local notes
 .context/
 .DS_Store
+binaries/

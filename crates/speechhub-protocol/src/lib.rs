@@ -40,7 +40,14 @@ pub enum Request {
         #[serde(default)]
         options: SpeakOptions,
     },
-    /// Run a user-defined Source by id (the only privileged verb).
+    /// Render text to a WAV file at `path` without playing it (CLI `speak -o`).
+    Render {
+        text: String,
+        #[serde(default)]
+        options: SpeakOptions,
+        path: String,
+    },
+    /// Run a user-defined Source by id or name (the only privileged verb).
     RunSource { source_id: String },
     Stop,
     Pause,
@@ -50,6 +57,8 @@ pub enum Request {
     ListSources,
     /// Open the Quick Speak palette.
     Palette,
+    /// App + protocol version.
+    Version,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -178,6 +187,43 @@ pub struct VoiceInfo {
     pub custom: bool,
 }
 
+/// Socket location relative to the app data dir (`~/Library/Application Support/<bundle id>`).
+pub const BUNDLE_ID: &str = "com.jeremym.speechhub";
+pub const SOCKET_RELATIVE_PATH: &str = "run/hub.sock";
+
+/// Default socket path for the current user.
+pub fn default_socket_path() -> Option<std::path::PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(std::path::PathBuf::from(home).join("Library/Application Support").join(BUNDLE_ID).join(SOCKET_RELATIVE_PATH))
+}
+
+/// Length-prefixed JSON framing shared by server and client.
+pub mod frame {
+    use super::MAX_FRAME_BYTES;
+    use std::io::{self, Read, Write};
+
+    pub fn write<W: Write>(w: &mut W, payload: &[u8]) -> io::Result<()> {
+        if payload.len() > MAX_FRAME_BYTES {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "frame too large"));
+        }
+        w.write_all(&(payload.len() as u32).to_be_bytes())?;
+        w.write_all(payload)?;
+        w.flush()
+    }
+
+    pub fn read<R: Read>(r: &mut R) -> io::Result<Vec<u8>> {
+        let mut len = [0u8; 4];
+        r.read_exact(&mut len)?;
+        let len = u32::from_be_bytes(len) as usize;
+        if len > MAX_FRAME_BYTES {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "frame too large"));
+        }
+        let mut buf = vec![0u8; len];
+        r.read_exact(&mut buf)?;
+        Ok(buf)
+    }
+}
+
 /// Validate an envelope before it reaches the hub. Returns the error code to answer with.
 pub fn validate(env: &Envelope) -> Result<(), (ErrorCode, String)> {
     if env.version != PROTOCOL_VERSION {
@@ -218,6 +264,14 @@ pub fn validate(env: &Envelope) -> Result<(), (ErrorCode, String)> {
         Request::Speak { text, options } | Request::Open { text, options } => {
             check_text(text)?;
             check_opts(options)
+        }
+        Request::Render { text, options, path } => {
+            check_text(text)?;
+            check_opts(options)?;
+            if path.is_empty() || path.len() > 4096 || !path.ends_with(".wav") {
+                return Err((ErrorCode::InvalidRequest, "output path must end in .wav".into()));
+            }
+            Ok(())
         }
         Request::RunSource { source_id } => {
             if source_id.is_empty() || source_id.len() > 128 {
@@ -275,6 +329,21 @@ mod tests {
             text: "hi".into(),
             options: SpeakOptions { speed: Some(9.0), ..Default::default() },
         });
+        assert_eq!(validate(&e).unwrap_err().0, ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn frame_roundtrip() {
+        let mut buf = Vec::new();
+        frame::write(&mut buf, b"{\"a\":1}").unwrap();
+        assert_eq!(&buf[..4], &[0, 0, 0, 7]);
+        let back = frame::read(&mut &buf[..]).unwrap();
+        assert_eq!(back, b"{\"a\":1}");
+    }
+
+    #[test]
+    fn render_requires_wav() {
+        let e = env(Request::Render { text: "hi".into(), options: Default::default(), path: "/tmp/x.mp3".into() });
         assert_eq!(validate(&e).unwrap_err().0, ErrorCode::InvalidRequest);
     }
 
