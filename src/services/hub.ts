@@ -19,6 +19,7 @@ export const hub = {
   previewVoice: (voiceId: string) => invoke<string>("hub_preview_voice", { voiceId }),
   engines: () => invoke<ProfileCard[]>("hub_engines"),
   readerTakePending: () => invoke<ReaderText | null>("reader_take_pending"),
+  paletteSelectionPreview: () => invoke<{ preview: string; chars: number; appName: string | null } | null>("palette_selection_preview"),
 
   getSettings: () => invoke<Settings>("get_settings"),
   updateSettings: (settings: Settings) => invoke<Settings>("update_settings", { settings }),

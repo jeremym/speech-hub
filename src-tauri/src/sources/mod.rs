@@ -459,10 +459,10 @@ pub fn run_quick_speak_source(app: &AppHandle, settings: &SettingsStore) {
         Some(id) if !id.is_empty() => {
             if let Err(e) = run_by_ref(app, id) {
                 log::warn!("quick speak source: {e}");
-                windows::show(app, windows::PALETTE);
+                hub::get(app).open_palette();
             }
         }
-        _ => windows::show(app, windows::PALETTE),
+        _ => hub::get(app).open_palette(),
     }
 }
 

@@ -30,6 +30,8 @@ uuid = { version = "1", features = ["v4"] }
 cpal = "0.18"
 hound = "3"
 core-foundation = "0.10"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSApplication", "NSResponder", "NSGraphics", "NSRunningApplication"] }
 sherpa-onnx = "2"
 piper-phonemize = "1"
 libc = "0.2"

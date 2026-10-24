@@ -1,7 +1,7 @@
 //! Unix-domain-socket server: the public interface for the `speak` CLI and other local apps.
 //! One request per connection, length-prefixed JSON (speechhub-protocol). Same-user only.
 
-use crate::{hub::{self, Hub}, windows};
+use crate::hub::{self, Hub};
 use speechhub_protocol::{self as proto, Envelope, ErrorCode, Request, Response, frame};
 use std::{
     fs,
@@ -125,7 +125,7 @@ pub fn dispatch(app: &AppHandle, env: Envelope) -> Response {
         Request::ListVoices => Response::ok_with(id, hub.voices()),
         Request::ListSources => Response::ok_with(id, crate::sources::list_public(app)),
         Request::Palette => {
-            windows::show(app, windows::PALETTE);
+            hub.open_palette();
             Response::ok(id)
         }
         Request::Version => Response::ok_with(

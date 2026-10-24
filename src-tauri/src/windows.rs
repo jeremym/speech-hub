@@ -43,6 +43,10 @@ fn ensure(app: &AppHandle, label: &str) -> tauri::Result<tauri::WebviewWindow> {
         _ => builder,
     };
     let window = builder.visible(false).build()?;
+    match label {
+        PLAYER | PALETTE => crate::macos::float_on_all_spaces(&window),
+        _ => crate::macos::move_to_active_space(&window),
+    }
     if label == PLAYER {
         position_player(app, &window);
     }
@@ -86,22 +90,31 @@ pub fn show(app: &AppHandle, label: &str) {
     });
 }
 
-/// Show the mini player without stealing focus.
+/// Show the mini player without stealing focus or switching Spaces.
 pub fn show_player(app: &AppHandle) {
     cancel_player_hide();
     on_main(app, |app| match ensure(app, PLAYER) {
         Ok(w) => {
-            position_player(app, &w);
-            let _ = w.show();
+            if !w.is_visible().unwrap_or(false) {
+                position_player(app, &w);
+            }
+            crate::macos::order_front_without_focus(&w);
         }
         Err(e) => log::error!("cannot open player: {e}"),
     });
 }
 
 pub fn hide(app: &AppHandle, label: &str) {
-    if let Some(w) = app.get_webview_window(label) {
-        let _ = w.hide();
-    }
+    let label = label.to_string();
+    on_main(app, move |app| {
+        if let Some(w) = app.get_webview_window(&label) {
+            let _ = w.hide();
+        }
+        // The palette took keyboard focus; hand it back to the app the user was in.
+        if label == PALETTE {
+            crate::macos::deactivate_app();
+        }
+    });
 }
 
 pub fn is_visible(app: &AppHandle, label: &str) -> bool {

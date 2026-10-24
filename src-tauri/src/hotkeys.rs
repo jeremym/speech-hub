@@ -29,7 +29,7 @@ pub fn handler(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
 
 fn on_quick_speak(app: &AppHandle, settings: &Settings) {
     match settings.quick_speak_action {
-        QuickSpeakAction::Palette => windows::show(app, windows::PALETTE),
+        QuickSpeakAction::Palette => hub::get(app).open_palette(),
         QuickSpeakAction::Reader => windows::show(app, windows::READER),
         QuickSpeakAction::Source => {
             let store = app.state::<crate::settings::SettingsStore>().inner().clone();

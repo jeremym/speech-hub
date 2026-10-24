@@ -129,6 +129,11 @@ pub fn hub_engines(app: AppHandle) -> Vec<engines::ProfileCard> {
 }
 
 #[tauri::command]
+pub fn palette_selection_preview(app: AppHandle) -> Option<hub::SelectionPreview> {
+    hub::get(&app).selection_preview()
+}
+
+#[tauri::command]
 pub fn reader_take_pending(app: AppHandle) -> Option<ReaderText> {
     hub::get(&app).take_pending_reader()
 }
@@ -168,6 +173,9 @@ pub fn hotkeys_apply(app: AppHandle, store: State<SettingsStore>) -> Vec<HotkeyS
 
 #[tauri::command]
 pub fn open_window(app: AppHandle, label: String, pane: Option<String>, prefill: Option<serde_json::Value>) {
+    if label == windows::PALETTE {
+        return hub::get(&app).open_palette();
+    }
     match pane {
         Some(p) => windows::navigate_with(&app, &label, &p, prefill),
         None => windows::show(&app, &label),

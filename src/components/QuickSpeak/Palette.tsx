@@ -14,11 +14,17 @@ export default function Palette() {
   const [err, setErr] = useState<string | null>(null);
   const [sources, setSources] = useState<PublicSource[]>([]);
   const [confirm, setConfirm] = useState<PublicSource | null>(null);
+  const [selection, setSelection] = useState<{ preview: string; chars: number; appName: string | null } | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   const reload = () => hub.sources.listPublic().then(setSources).catch(() => {});
   useEffect(() => {
-    const focus = () => { setQ(""); setSel(0); setErr(null); reload(); hub.sources.takePendingConfirm().then((c) => c && setConfirm(c)).catch(() => {}); setTimeout(() => input.current?.focus(), 30); };
+    const focus = () => {
+      setQ(""); setSel(0); setErr(null); reload();
+      hub.paletteSelectionPreview().then(setSelection).catch(() => setSelection(null));
+      hub.sources.takePendingConfirm().then((c) => c && setConfirm(c)).catch(() => {});
+      setTimeout(() => input.current?.focus(), 30);
+    };
     focus();
     const un1 = listen<string>("window:shown", (e) => e.payload === "palette" && focus());
     const un2 = listen("sources:changed", reload);
@@ -32,7 +38,12 @@ export default function Palette() {
     const ql = typed.toLowerCase();
     const matches = (s: string) => !ql || s.toLowerCase().includes(ql);
     const actions: Item[] = [
-      { id: "selection", icon: "🖱️", label: "Speak selected text", hint: "what's highlighted behind this window", run: () => hub.speakSelection(), section: "actions" as const },
+      {
+        id: "selection", icon: "🖱️",
+        label: selection ? `Speak selected text${selection.appName ? ` from ${selection.appName}` : ""}` : "Speak selected text",
+        hint: selection ? `“${selection.preview.length > 40 ? selection.preview.slice(0, 40) + "…" : selection.preview}” · ${selection.chars.toLocaleString()} chars` : "nothing was selected when this opened",
+        run: () => hub.speakSelection(), section: "actions" as const,
+      },
       { id: "reader", icon: "📝", label: "Open Reader", hint: "type or paste anything", run: () => hub.openWindow("reader"), section: "actions" as const },
       { id: "new-source", icon: "＋", label: "New Source…", hint: "file, command, Shortcut, URL", run: () => hub.openWindow("settings", "sources-new"), section: "actions" as const },
     ].filter((a) => matches(a.label));
@@ -47,7 +58,7 @@ export default function Palette() {
     ] : [];
     // Sources first when searching (that's what people type), actions first when idle.
     return typed ? [...src, ...typedItems, ...actions] : [...actions, ...src];
-  }, [typed, sources]);
+  }, [typed, sources, selection]);
 
   const run = async (item: Item) => {
     try { await item.run(); close(); } catch (e) { setErr(errorMessage(e)); }

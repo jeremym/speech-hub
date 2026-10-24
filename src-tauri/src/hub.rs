@@ -48,6 +48,14 @@ struct Job {
 }
 
 #[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionPreview {
+    pub preview: String,
+    pub chars: usize,
+    pub app_name: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize)]
 pub struct RenderInfo {
     pub path: String,
     pub seconds: f32,
@@ -73,6 +81,8 @@ struct Inner {
     job: Mutex<Option<Arc<Job>>>,
     pending_reader: Mutex<Option<ReaderText>>,
     last_activity: Mutex<Instant>,
+    /// Selection captured the moment the palette opened (the palette itself then has focus).
+    selection_snapshot: Mutex<Option<(accessibility::Selection, Instant)>>,
 }
 
 #[derive(Clone)]
@@ -101,6 +111,7 @@ impl Hub {
                 job: Mutex::new(None),
                 pending_reader: Mutex::new(None),
                 last_activity: Mutex::new(Instant::now()),
+                selection_snapshot: Mutex::new(None),
             }),
         };
         hub.load_engine(&s.engine_profile);
@@ -442,14 +453,46 @@ impl Hub {
         self.inner.pending_reader.lock().unwrap().take()
     }
 
+    /// Open Quick Speak. Snapshot the selection first: once the palette is key, the focused
+    /// element is our own webview and Accessibility would report "nothing selected".
+    pub fn open_palette(&self) {
+        let snap = accessibility::selected_text().ok().map(|s| (s, Instant::now()));
+        *self.inner.selection_snapshot.lock().unwrap() = snap;
+        windows::show(&self.inner.app, windows::PALETTE);
+    }
+
+    /// What the palette's "Speak selected text" row will read, if anything.
+    pub fn selection_preview(&self) -> Option<SelectionPreview> {
+        let guard = self.inner.selection_snapshot.lock().unwrap();
+        let (sel, at) = guard.as_ref()?;
+        if at.elapsed() > Duration::from_secs(300) {
+            return None;
+        }
+        let words: String = sel.text.split_whitespace().take(12).collect::<Vec<_>>().join(" ");
+        Some(SelectionPreview { preview: words, chars: sel.text.chars().count(), app_name: sel.app_name.clone() })
+    }
+
+    fn take_fresh_snapshot(&self) -> Option<accessibility::Selection> {
+        let mut guard = self.inner.selection_snapshot.lock().unwrap();
+        match guard.take() {
+            Some((sel, at)) if at.elapsed() <= Duration::from_secs(300) => Some(sel),
+            _ => None,
+        }
+    }
+
     /// Option+Escape: capture the selection and speak it, honoring the repeat behavior.
+    /// From the palette, the snapshot taken when it opened is used instead of a live capture.
     pub fn speak_selection(&self) -> Result<String, HubError> {
         let settings = self.inner.settings.get();
         if self.is_busy() && settings.repeat_shortcut == RepeatBehavior::Stop {
             self.stop();
             return Ok(String::new());
         }
-        match accessibility::selected_text() {
+        let captured = match self.take_fresh_snapshot() {
+            Some(sel) => Ok(sel),
+            None => accessibility::selected_text(),
+        };
+        match captured {
             Ok(sel) => {
                 let title = Some(match sel.app_name {
                     Some(app) => format!("Selection from {app}"),

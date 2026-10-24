@@ -61,7 +61,7 @@ pub fn handle_url(app: &AppHandle, url: &str) {
     log::info!("deep link: {path}");
     match path {
         "" | "open" | "reader" => windows::show(app, windows::READER),
-        "palette" | "quick-speak" => windows::show(app, windows::PALETTE),
+        "palette" | "quick-speak" => hub::get(app).open_palette(),
         "preferences" | "settings" => windows::show(app, windows::SETTINGS),
         "stop" => hub::get(app).stop(),
         "speak" => {

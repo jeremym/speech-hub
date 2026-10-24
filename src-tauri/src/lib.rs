@@ -7,6 +7,7 @@ pub mod engines;
 mod hotkeys;
 mod hub;
 mod ipc;
+mod macos;
 mod playback;
 mod pronunciation;
 mod settings;
@@ -87,6 +88,7 @@ pub fn run() {
             commands::hub_preview_voice,
             commands::hub_engines,
             commands::reader_take_pending,
+            commands::palette_selection_preview,
             commands::ax_is_trusted,
             commands::ax_request,
             commands::open_system_settings,
