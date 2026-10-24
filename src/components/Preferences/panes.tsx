@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { hub, useHubStatus, useSettings, useSources, useVoices, errorMessage, STATE_LABEL } from "../../services/hub";
+import { hub, useDownloadProgress, useHubStatus, useSettings, useSources, useVoices, errorMessage, STATE_LABEL } from "../../services/hub";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import SourceBuilder from "../SourceBuilder/SourceBuilder";
+import PronunciationStudio from "../PronunciationStudio/PronunciationStudio";
 import { eventToShortcut, formatShortcut } from "../../lib/shortcut";
 import type { CliStatus, HotkeyStatus, ProfileCard, Settings, SystemInfo } from "../../types";
 import { Badge, Button, Card, Dots, Field, H1, Lead, Select, Toggle } from "../ui";
@@ -63,10 +65,20 @@ export function EnginePane({ wizard }: PaneProps) {
   const status = useHubStatus();
   const [cards, setCards] = useState<ProfileCard[]>([]);
   const [info, setInfo] = useState<SystemInfo | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [dlErr, setDlErr] = useState<string | null>(null);
+  const progress = useDownloadProgress();
+  const reloadCards = () => hub.engines().then(setCards).catch(() => {});
   useEffect(() => {
-    hub.engines().then(setCards).catch(() => {});
+    reloadCards();
     hub.systemInfo().then(setInfo).catch(() => {});
   }, []);
+  useEffect(() => {
+    if (progress === null) reloadCards();
+    if (progress?.phase === "error") setDlErr(progress.message);
+  }, [progress]);
+  const startDownload = () => { setDlErr(null); hub.plus.download().catch((e) => setDlErr(errorMessage(e))); };
+  const removePlus = () => hub.plus.remove().then(reloadCards).catch((e) => setDlErr(errorMessage(e)));
   const active = status?.engine.id;
   const selected = settings?.engineProfile;
   return (
@@ -104,6 +116,28 @@ export function EnginePane({ wizard }: PaneProps) {
                 </div>
                 <input type="radio" readOnly checked={isSelected} disabled={!c.installed} className="mt-1 accent-[var(--accent)]" aria-label={`Use ${c.name}`} />
               </div>
+              {c.id === "plus" && !c.installed && (
+                <div className="mt-3 border-t border-[var(--border)] pt-3" onClick={(e) => e.stopPropagation()}>
+                  {progress && progress.profile === "plus" && progress.phase !== "error" ? (
+                    <div>
+                      <div className="flex justify-between text-[12px] text-[var(--muted)]"><span>{progress.phase === "downloading" ? "Downloading…" : progress.phase === "verifying" ? "Verifying checksum…" : "Installing…"}</span><span>{progress.total ? `${Math.round((progress.bytes / progress.total) * 100)}%` : ""}</span></div>
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-[var(--border)]"><div className="h-1.5 rounded-full bg-[var(--accent)] transition-all" style={{ width: `${progress.total ? Math.min(100, (progress.bytes / progress.total) * 100) : 5}%` }} /></div>
+                    </div>
+                  ) : (
+                    <div className="text-[13px]">
+                      <p className="text-[var(--muted)]">Pocket TTS is made by Kyutai and licensed <strong>CC BY 4.0</strong>. Its model card prohibits voice impersonation or cloning without the speaker's explicit, lawful consent. Downloaded once from GitHub (sherpa-onnx releases) and verified by checksum; nothing else ever leaves this Mac.</p>
+                      <label className="mt-2 flex items-start gap-2"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 accent-[var(--accent)]" /><span>I'll only clone voices I have the right to use, and I accept the CC BY 4.0 terms.</span></label>
+                      <div className="mt-2 flex items-center gap-3"><Button variant="primary" disabled={!consent} onClick={startDownload}>Download Plus (98 MB)</Button>{dlErr && <span className="text-[var(--danger)]">{dlErr}</span>}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {c.id === "plus" && c.installed && (
+                <div className="mt-3 border-t border-[var(--border)] pt-2 flex items-center justify-between text-[13px]" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-[var(--muted)]">Add your own voices under Voices while Plus is selected.</span>
+                  <Button variant="ghost" onClick={removePlus}>Remove download</Button>
+                </div>
+              )}
             </Card>
           );
         })}
@@ -121,12 +155,37 @@ export function VoicesPane(_: PaneProps) {
   const status = useHubStatus();
   const voices = useVoices(status?.engine.id);
   const [filter, setFilter] = useState("");
+  const [adding, setAdding] = useState<{ path: string; name: string; consent: boolean } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
   const current = settings?.voiceId || status?.voice_id || "";
   const shown = voices.filter((v) => `${v.name} ${v.language}`.toLowerCase().includes(filter.toLowerCase()));
+  const isPlus = status?.engine.id === "plus" && status.engine.loaded;
+  const pickRecording = async () => {
+    const p = await pickFile({ multiple: false, filters: [{ name: "Audio", extensions: ["wav"] }] });
+    if (p && !Array.isArray(p)) setAdding({ path: p, name: "", consent: false });
+  };
+  const addVoice = async () => {
+    if (!adding) return;
+    try { await hub.customVoices.add(adding.path, adding.name, adding.consent); setAdding(null); setMsg("Voice added."); } catch (e) { setMsg(errorMessage(e)); }
+  };
+  const deleteVoice = (id: string) => hub.customVoices.delete(id).catch((e) => setMsg(errorMessage(e)));
   return (
     <div className="flex flex-col h-full min-h-0">
-      <H1>Voices</H1>
-      <Lead>Pick a default voice. Every app, script, and Source uses it unless they ask for another.</Lead>
+      <div className="flex items-start justify-between gap-4">
+        <div><H1>Voices</H1><Lead>Pick a default voice. Every app, script, and Source uses it unless they ask for another.</Lead></div>
+        {isPlus && !adding && <Button variant="primary" onClick={pickRecording}>＋ Add voice from WAV…</Button>}
+      </div>
+      {adding && (
+        <Card className="mb-3 border-[var(--accent)]/60">
+          <div className="font-medium">New voice from a recording</div>
+          <p className="text-[13px] text-[var(--muted)] mt-0.5 break-all">{adding.path}</p>
+          <p className="text-[13px] text-[var(--muted)] mt-1">Best results: 5–15 seconds of one person speaking clearly, no music. Longer clips are trimmed to 30 s. The file stays on this Mac.</p>
+          <input autoFocus value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} placeholder="Voice name" className="mt-2 w-full rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5" />
+          <label className="mt-2 flex items-start gap-2 text-[13px]"><input type="checkbox" checked={adding.consent} onChange={(e) => setAdding({ ...adding, consent: e.target.checked })} className="mt-0.5 accent-[var(--accent)]" /><span>This is my own voice, or I have the speaker's explicit consent to clone it.</span></label>
+          <div className="mt-3 flex gap-2 justify-end"><Button variant="ghost" onClick={() => setAdding(null)}>Cancel</Button><Button variant="primary" disabled={!adding.name.trim() || !adding.consent} onClick={addVoice}>Add voice</Button></div>
+        </Card>
+      )}
+      {msg && <p className="text-[13px] text-[var(--muted)] mb-2">{msg}</p>}
       <div className="flex items-center gap-3 mb-3">
         <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search voices…" className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5" />
         <label className="flex items-center gap-2 text-[13px] text-[var(--muted)]">
@@ -145,6 +204,7 @@ export function VoicesPane(_: PaneProps) {
               {v.custom && <Badge tone="accent">Custom</Badge>}
             </button>
             <Button variant="ghost" onClick={() => hub.previewVoice(v.id).catch(() => {})}>▶ Preview</Button>
+            {v.custom && <Button variant="ghost" onClick={() => deleteVoice(v.id)} aria-label="Delete voice">✕</Button>}
           </div>
         ))}
       </div>
@@ -234,9 +294,10 @@ export function GeneralPane(_: PaneProps) {
         <Field label="Show the mini player" hint="A small floating controller appears while speaking when the Reader isn't open.">
           <Toggle checked={settings.showMiniPlayer} onChange={(v) => save({ showMiniPlayer: v })} />
         </Field>
-        <Field label="Unload the model when idle" hint="Frees memory on smaller Macs. The next request reloads it (a short delay). 0 = keep loaded.">
+        <Field label="Unload the model when idle" hint="Frees ~500 MB on the Standard engine. The next request reloads it (about half a second). 0 = keep loaded.">
           <input type="number" min={0} max={240} value={settings.idleUnloadMinutes} onChange={(e) => save({ idleUnloadMinutes: Math.max(0, Number(e.target.value) || 0) })} className="w-20 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-right" />
           <span className="text-[13px] text-[var(--muted)]">min</span>
+          <Button variant="ghost" onClick={() => hub.unloadEngine()}>Unload now</Button>
         </Field>
       </Card>
     </div>
@@ -312,13 +373,7 @@ export function SourcePicker({ value, onChange, none }: { value: string | null; 
 }
 
 export function PronunciationPane(_: PaneProps) {
-  return (
-    <div>
-      <H1>Pronunciation Studio</H1>
-      <Lead>Teach Speech Hub how to say a name or a technical term once; the fix applies everywhere.</Lead>
-      <Card><p className="text-[var(--muted)]">Arrives in Milestone 5.</p></Card>
-    </div>
-  );
+  return <PronunciationStudio />;
 }
 
 export function AboutPane(_: PaneProps) {

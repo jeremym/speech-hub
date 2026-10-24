@@ -167,9 +167,9 @@ pub fn hotkeys_apply(app: AppHandle, store: State<SettingsStore>) -> Vec<HotkeyS
 // ---------- windows ----------
 
 #[tauri::command]
-pub fn open_window(app: AppHandle, label: String, pane: Option<String>) {
+pub fn open_window(app: AppHandle, label: String, pane: Option<String>, prefill: Option<serde_json::Value>) {
     match pane {
-        Some(p) => windows::navigate(&app, &label, &p),
+        Some(p) => windows::navigate_with(&app, &label, &p, prefill),
         None => windows::show(&app, &label),
     }
 }
@@ -440,4 +440,131 @@ pub fn shortcuts_list() -> Vec<String> {
 #[tauri::command]
 pub fn palette_take_pending_confirm(app: AppHandle) -> Option<PublicSource> {
     app.state::<sources::PendingConfirm>().0.lock().unwrap().take()
+}
+
+// ---------- pronunciation ----------
+
+use crate::pronunciation::{self, Rule, RuleStore};
+
+fn rules_changed(app: &AppHandle) {
+    use tauri::Emitter;
+    let _ = app.emit(pronunciation::CHANGED_EVENT, ());
+}
+
+#[tauri::command]
+pub fn rules_list(store: State<RuleStore>) -> Vec<Rule> {
+    let mut v = store.list();
+    v.sort_by(|a, b| a.match_text.to_lowercase().cmp(&b.match_text.to_lowercase()));
+    v
+}
+
+#[tauri::command]
+pub fn rules_save(app: AppHandle, store: State<RuleStore>, rule: Rule) -> R<Rule> {
+    let r = store.upsert(rule)?;
+    rules_changed(&app);
+    Ok(r)
+}
+
+#[tauri::command]
+pub fn rules_delete(app: AppHandle, store: State<RuleStore>, id: String) -> R<()> {
+    store.delete(&id)?;
+    rules_changed(&app);
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RulePreview {
+    pub spoken: String,
+    pub changed: bool,
+}
+
+/// What the engine would receive for this text (rules + normalization), optionally with a draft rule applied.
+#[tauri::command]
+pub fn rules_preview(store: State<RuleStore>, text: String, draft: Option<Rule>) -> RulePreview {
+    let mut rules = store.list();
+    if let Some(d) = draft {
+        rules.retain(|r| r.id != d.id);
+        rules.push(d);
+    }
+    let spoken = crate::text::normalize(&pronunciation::apply(&text, &rules));
+    let changed = spoken != crate::text::normalize(&text);
+    RulePreview { spoken, changed }
+}
+
+#[tauri::command]
+pub fn rules_export(store: State<RuleStore>, path: String) -> R<()> {
+    std::fs::write(&path, store.export_json()).map_err(|e| format!("cannot write {path}: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn rules_import(app: AppHandle, store: State<RuleStore>, path: String) -> R<usize> {
+    let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    if json.len() > 2 * 1024 * 1024 {
+        return Err("import file is larger than 2 MB".to_string().into());
+    }
+    let n = store.import_json(&json)?;
+    rules_changed(&app);
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn hub_unload_engine(app: AppHandle) {
+    hub::get(&app).unload_engine();
+}
+
+// ---------- Plus download + custom voices ----------
+
+use crate::engines::{download, pocket::{CustomVoice, VoiceLibrary}};
+
+/// Start downloading the Plus model. Returns immediately; progress arrives as `models:download` events.
+#[tauri::command]
+pub fn plus_download(app: AppHandle) -> R<()> {
+    let hub = hub::get(&app);
+    let root = hub.roots().download_root.clone();
+    std::thread::Builder::new()
+        .name("speechhub-download".into())
+        .spawn(move || {
+            if let Err(e) = download::install(&app, &download::PLUS, &root) {
+                log::error!("plus download: {e}");
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn plus_remove(app: AppHandle, store: State<SettingsStore>) -> R<()> {
+    let hub = hub::get(&app);
+    if store.get().engine_profile == "plus" {
+        hub.unload_engine();
+        let s = store.update(|s| { s.engine_profile = recommended_profile(); s.voice_id.clear(); })?;
+        hub.load_engine(&s.engine_profile);
+    }
+    download::remove(&hub.roots().download_root, "plus")?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn voices_custom_list(app: AppHandle) -> Vec<CustomVoice> {
+    VoiceLibrary::new(hub::get(&app).roots().voices_dir.clone()).list()
+}
+
+/// Add a reference recording as a new voice. `consent` must be true: the user confirms they have the right.
+#[tauri::command]
+pub fn voices_custom_add(app: AppHandle, path: String, name: String, consent: bool) -> R<CustomVoice> {
+    let hub = hub::get(&app);
+    let lib = VoiceLibrary::new(hub.roots().voices_dir.clone());
+    let v = lib.add(std::path::Path::new(&path), &name, consent)?;
+    hub.refresh_voices();
+    Ok(v)
+}
+
+#[tauri::command]
+pub fn voices_custom_delete(app: AppHandle, id: String) -> R<()> {
+    let hub = hub::get(&app);
+    VoiceLibrary::new(hub.roots().voices_dir.clone()).remove(&id)?;
+    hub.refresh_voices();
+    Ok(())
 }

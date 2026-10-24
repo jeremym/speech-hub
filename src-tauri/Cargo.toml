@@ -33,6 +33,9 @@ core-foundation = "0.10"
 sherpa-onnx = "2"
 piper-phonemize = "1"
 libc = "0.2"
+sha2 = "0.10"
+bzip2 = "0.5"
+tar = "0.4"
 tauri-plugin-deep-link = "2"
 
 [features]

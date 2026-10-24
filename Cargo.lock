@@ -474,6 +474,15 @@ dependencies = [
 
 [[package]]
 name = "bzip2"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49ecfb22d906f800d4fe833b6282cf4dc1c298f5057ca0b5445e5c209735ca47"
+dependencies = [
+ "bzip2-sys",
+]
+
+[[package]]
+name = "bzip2"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3a53fac24f34a81bc9954b5d6cfce0c21e18ec6959f44f56e8e90e4bb7c346c"
@@ -4056,6 +4065,7 @@ dependencies = [
 name = "speech-hub"
 version = "0.1.0"
 dependencies = [
+ "bzip2 0.5.2",
  "core-foundation",
  "cpal",
  "env_logger",
@@ -4065,8 +4075,10 @@ dependencies = [
  "piper-phonemize",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sherpa-onnx",
  "speechhub-protocol",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",

@@ -8,6 +8,7 @@ mod hotkeys;
 mod hub;
 mod ipc;
 mod playback;
+mod pronunciation;
 mod settings;
 mod sources;
 pub mod text;
@@ -38,12 +39,14 @@ pub fn run() {
             let settings = settings::SettingsStore::load(&data_dir);
             app.manage(settings.clone());
             app.manage(sources::SourceStore::load(&data_dir));
+            let rules = pronunciation::RuleStore::load(&data_dir);
+            app.manage(rules.clone());
             app.manage(sources::PendingConfirm::default());
 
             let bundled = app.path().resource_dir().ok().map(|r| r.join("resources").join("models"));
             let roots = engines::ModelRoots::new(bundled, data_dir.join("models"));
             log::info!("model roots: {:?}", roots.roots);
-            let hub = hub::Hub::new(app.handle().clone(), settings.clone(), roots)
+            let hub = hub::Hub::new(app.handle().clone(), settings.clone(), roots, rules)
                 .map_err(|e| std::io::Error::other(e))?;
             app.manage(hub);
 
@@ -107,6 +110,18 @@ pub fn run() {
             commands::sources_import,
             commands::shortcuts_list,
             commands::palette_take_pending_confirm,
+            commands::rules_list,
+            commands::rules_save,
+            commands::rules_delete,
+            commands::rules_preview,
+            commands::rules_export,
+            commands::rules_import,
+            commands::hub_unload_engine,
+            commands::plus_download,
+            commands::plus_remove,
+            commands::voices_custom_list,
+            commands::voices_custom_add,
+            commands::voices_custom_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Speech Hub");

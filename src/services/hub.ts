@@ -2,8 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type {
-  CliStatus, HotkeyStatus, ProfileCard, PublicSource, ReaderText, RunResult, Settings, Source, SourceTemplate,
-  SpeakOptions, Status, SystemInfo, TestResult, VoiceInfo, WindowLabel,
+  CliStatus, CustomVoice, DownloadProgress, HotkeyStatus, ProfileCard, PublicSource, ReaderText, Rule, RulePreview,
+  RunResult, Settings, Source, SourceTemplate, SpeakOptions, Status, SystemInfo, TestResult, VoiceInfo, WindowLabel,
 } from "../types";
 
 export const hub = {
@@ -31,6 +31,8 @@ export const hub = {
   hotkeysApply: () => invoke<HotkeyStatus[]>("hotkeys_apply"),
 
   openWindow: (label: WindowLabel, pane?: string) => invoke<void>("open_window", { label, pane }),
+  openWindowWithPrefill: (label: WindowLabel, pane: string, prefill: { text: string; context: string }) =>
+    invoke<void>("open_window", { label, pane, prefill }),
   cliStatus: () => invoke<CliStatus>("cli_status"),
   cliInstall: () => invoke<CliStatus>("cli_install"),
   cliUninstall: () => invoke<CliStatus>("cli_uninstall"),
@@ -52,7 +54,48 @@ export const hub = {
     shortcuts: () => invoke<string[]>("shortcuts_list"),
     takePendingConfirm: () => invoke<PublicSource | null>("palette_take_pending_confirm"),
   },
+
+  rules: {
+    list: () => invoke<Rule[]>("rules_list"),
+    save: (rule: Rule) => invoke<Rule>("rules_save", { rule }),
+    delete: (id: string) => invoke<void>("rules_delete", { id }),
+    preview: (text: string, draft?: Rule) => invoke<RulePreview>("rules_preview", { text, draft }),
+    exportTo: (path: string) => invoke<void>("rules_export", { path }),
+    importFrom: (path: string) => invoke<number>("rules_import", { path }),
+  },
+  unloadEngine: () => invoke<void>("hub_unload_engine"),
+
+  plus: {
+    download: () => invoke<void>("plus_download"),
+    remove: () => invoke<void>("plus_remove"),
+  },
+  customVoices: {
+    list: () => invoke<CustomVoice[]>("voices_custom_list"),
+    add: (path: string, name: string, consent: boolean) => invoke<CustomVoice>("voices_custom_add", { path, name, consent }),
+    delete: (id: string) => invoke<void>("voices_custom_delete", { id }),
+  },
 };
+
+/** Progress of the Plus download, or null when idle. */
+export function useDownloadProgress(): DownloadProgress | null {
+  const [p, setP] = useState<DownloadProgress | null>(null);
+  useEffect(() => {
+    const un = listen<DownloadProgress>("models:download", (e) => setP(e.payload.phase === "done" ? null : e.payload));
+    return () => { un.then((u) => u()); };
+  }, []);
+  return p;
+}
+
+export function useRules(): { rules: Rule[]; reload: () => void } {
+  const [rules, setRules] = useState<Rule[]>([]);
+  const reload = useCallback(() => { hub.rules.list().then(setRules).catch(() => {}); }, []);
+  useEffect(() => {
+    reload();
+    const un = listen("pronunciation:changed", reload);
+    return () => { un.then((u) => u()); };
+  }, [reload]);
+  return { rules, reload };
+}
 
 /** Live list of Sources (re-fetched on `sources:changed`). */
 export function useSources(): { sources: Source[]; reload: () => void } {
@@ -107,7 +150,10 @@ export function useSettings() {
 export function useVoices(engineId?: string): VoiceInfo[] {
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   useEffect(() => {
-    hub.voices().then(setVoices).catch(() => setVoices([]));
+    const load = () => hub.voices().then(setVoices).catch(() => setVoices([]));
+    load();
+    const un = listen("voices:changed", load);
+    return () => { un.then((u) => u()); };
   }, [engineId]);
   return voices;
 }

@@ -2,7 +2,7 @@
 
 > Give anything on your Mac a voice. One local speech engine, shared by every app, script, and shortcut.
 
-Status: **M1–M3 built, M4 in progress** (2026-10-24). Decisions in §2 are final. See `docs/perf.md` for measured numbers. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
+Status: **M1–M6 built and verified end-to-end through the CLI** (2026-10-24). M7 (signing, notarization, DMG, CI) remains. Hands-on tests that need a human (Accessibility, hotkeys, windows) are deferred until after signing by design. See `docs/perf.md` for measured numbers. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
 
 ---
 
@@ -164,29 +164,31 @@ Untrusted: deep links, imported Sources, socket requests, HTTP bodies, command s
 
 Each milestone ends with running code on a real Mac and a short demo note in `.context/`.
 
-**M1 — Native shell (Phase 1)**
+Progress legend: ✅ built + verified · 🟡 built, needs hands-on test · ⬜ not started
+
+**M1 — Native shell (Phase 1)** 🟡 (code complete; AX capture, hotkeys and window focus behavior await a human after signing)
 Tauri menu-bar app · AX selection capture (`AXUIElement` + `kAXSelectedTextAttribute`, with the AXFocusedUIElement → AXSelectedTextRange fallback) · Option+Escape · Accessibility-permission onboarding · stub engine that plays via macOS `say` *only as a dev placeholder, removed in M2*.
 Done when: select text in TextEdit and Firefox, press the key, hear it.
 
-**M2 — Real offline speech (Phase 2)**
+**M2 — Real offline speech (Phase 2)** ✅
 sherpa-onnx integration · bundled Kokoro int8 + Piper Lite · `Engine` trait · profile picker · chunked sentence pipeline · cpal playback · pause/resume/stop · mini player · **measured benchmarks** committed to `docs/perf.md`.
 Done when: M1 demo runs with Kokoro, offline, from a signed `.app`.
 
-**M3 — Speech Hub + CLI (Phase 3)** ← *the differentiating milestone*
+**M3 — Speech Hub + CLI (Phase 3)** ✅ ← *the differentiating milestone*
 Protocol crate · socket server · `speak` CLI with say-compatible flags · launch-on-demand · `docs/public-api.md` · `examples/` (shell, clipboard-manager, Raycast).
 Done when: `echo hi | speak` works from a cold app.
 
-**M4 — Sources + Quick Speak (Phase 4)**
+**M4 — Sources + Quick Speak (Phase 4)** ✅ (backend verified via `speak run`; Builder UI awaits hands-on)
 Source model + persistence · Option+Shift+Escape palette · Source Builder UI · 5 types · templates · test button · import/export with trust gate · fallback-Source hook.
 Done when: a non-dev builds a working `pbpaste` Source in under a minute.
 
-**M5 — Personalization (Phase 5)**
+**M5 — Personalization (Phase 5)** ✅
 Pronunciation Studio (substitution rules, deterministic order, preview, import/export) · per-Source voice/speed · voice previews · reader polish · idle unload.
 
-**M6 — Plus tier / cloning (Phase 6)**
+**M6 — Plus tier / cloning (Phase 6)** ✅ (download, verify, extract, engine, custom voices from WAV; microphone recording deferred)
 Pocket TTS via sherpa-onnx, download-on-demand with license + consent UI · reference-audio voice creation · local voice store. Ship only if real cloning works.
 
-**M7 — Release (Phase 7)**
+**M7 — Release (Phase 7)** ⬜
 Signing + notarization · DMG · GitHub Actions (build + Rust/Vitest tests; native AX tests are manual, documented) · license notices (incl. espeak-ng GPL) · clean-machine verification · README for users / power users / developers.
 
 **Later / research:** `AVSpeechSynthesisProviderAudioUnit` (macOS 13+, works with VoiceOver and Speak Screen — needs Swift app extension) · Services menu · Shortcuts actions · Intel universal build · optional queue mode.

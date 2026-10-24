@@ -24,6 +24,13 @@ export default function Reader() {
     setErr(null);
     hub.speak(text, { title: title ?? "Reader" }).catch((e) => setErr(errorMessage(e)));
   };
+  const fixPronunciation = () => {
+    const ta = document.querySelector("textarea");
+    const sel = ta ? text.slice(ta.selectionStart, ta.selectionEnd).trim() : "";
+    const start = ta ? Math.max(0, ta.selectionStart - 60) : 0;
+    const context = ta ? text.slice(start, ta.selectionEnd + 60).replace(/\s+/g, " ").trim() : "";
+    hub.openWindowWithPrefill("settings", "pronunciation", { text: sel, context: context || sel });
+  };
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); speak(); }
     if (e.key === "Escape" && busy) { hub.stop(); }
@@ -51,6 +58,7 @@ export default function Reader() {
           {(settings?.speed ?? 1).toFixed(2)}×
         </label>
         <span className="flex-1" />
+        <Button variant="ghost" onClick={fixPronunciation} title="Select a word first">Fix pronunciation…</Button>
         <Button variant="ghost" onClick={() => { setText(""); setTitle(null); }} disabled={!text}>Clear</Button>
       </div>
       <textarea

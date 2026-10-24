@@ -169,3 +169,23 @@ export interface TestResult {
   fetchMs: number;
   truncated: boolean;
 }
+
+// ---- Pronunciation (M5)
+
+export interface Rule {
+  id: string;
+  matchText: string;
+  replacement: string;
+  wholeWord: boolean;
+  caseSensitive: boolean;
+  enabled: boolean;
+  note: string;
+  createdAt: number;
+}
+
+export interface RulePreview { spoken: string; changed: boolean }
+
+// ---- Plus / custom voices (M6)
+
+export interface CustomVoice { id: string; name: string; file: string; consent: boolean; createdAt: number }
+export interface DownloadProgress { profile: string; phase: "downloading" | "verifying" | "extracting" | "done" | "error"; bytes: number; total: number; message: string | null }

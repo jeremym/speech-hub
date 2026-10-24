@@ -13,9 +13,11 @@ use std::{
 
 #[cfg(feature = "dev-say")]
 pub mod dev_say;
+pub mod download;
 pub mod kokoro;
 pub mod phonemize;
 pub mod piper;
+pub mod pocket;
 pub mod sherpa;
 
 /// Mono PCM, f32 in [-1, 1].
@@ -48,10 +50,13 @@ pub struct ModelRoots {
     pub roots: Vec<PathBuf>,
     /// Where downloaded (non-bundled) profiles are written.
     pub download_root: PathBuf,
+    /// User-added reference voices for Plus.
+    pub voices_dir: PathBuf,
 }
 
 impl ModelRoots {
     pub fn new(bundled: Option<PathBuf>, download_root: PathBuf) -> Self {
+        let voices_dir = download_root.parent().map(|p| p.join("voices")).unwrap_or_else(|| download_root.join("voices"));
         let mut roots = Vec::new();
         if let Ok(over) = std::env::var("SPEECH_HUB_MODELS_DIR") {
             roots.push(PathBuf::from(over));
@@ -60,7 +65,7 @@ impl ModelRoots {
             roots.push(b);
         }
         roots.push(download_root.clone());
-        Self { roots, download_root }
+        Self { roots, download_root, voices_dir }
     }
 
     /// Directory for a profile, if any root has it installed.
@@ -187,7 +192,7 @@ pub fn create(profile: &str, roots: &ModelRoots) -> Result<(Box<dyn Engine>, Str
         match id {
             "standard" => Ok(Box::new(kokoro::KokoroEngine::load(&dir)?)),
             "lite" => Ok(Box::new(piper::PiperEngine::load(&dir)?)),
-            "plus" => Err(EngineError::NotInstalled("plus (arrives in Milestone 6)".into())),
+            "plus" => Ok(Box::new(pocket::PocketEngine::load(&dir, pocket::VoiceLibrary::new(roots.voices_dir.clone()))?)),
             #[cfg(feature = "dev-say")]
             "dev-say" => Ok(Box::new(dev_say::DevSayEngine::new())),
             other => Err(EngineError::NotInstalled(other.to_string())),

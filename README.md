@@ -4,7 +4,7 @@
 
 Speech Hub is a menu-bar utility for macOS that reads selected text aloud with a natural, fully local AI voice. It is also a shared speech service: any app, script, Apple Shortcut, or user-built "Source" can speak through it with one command.
 
-> Status: early development, Milestone 1 (native shell). See [PLAN.md](PLAN.md) for the roadmap.
+> Status: feature-complete through Milestone 6 (engines, CLI, Sources, pronunciation, voice cloning). Not yet signed or notarized. See [PLAN.md](PLAN.md).
 
 ## What makes it different
 
@@ -23,19 +23,36 @@ Speech Hub is a menu-bar utility for macOS that reads selected text aloud with a
 
 Both are configurable.
 
+## Engines
+
+| Profile | Model | Size | First audio* | Notes |
+|---|---|---|---|---|
+| Lite | Piper (3 voices, int8) | 53 MB | 380 ms | bundled, runs on anything |
+| Standard | Kokoro-82M fp32 (54 voices, 9 languages) | 337 MB | 340 ms | bundled, default on Apple Silicon |
+| Plus | Pocket TTS (Kyutai) | 98 MB download | 261 ms | voice cloning from a 10 s WAV; CC-BY-4.0 |
+
+\* M3 Ultra, release build. See [docs/perf.md](docs/perf.md).
+
 ## Build
 
 Requirements: Rust (stable), Node 20+, pnpm, Xcode command line tools.
 
 ```bash
 pnpm install
-pnpm tauri dev          # run
-pnpm tauri build        # .app + .dmg in src-tauri/target/release/bundle
-cargo test              # Rust tests
-pnpm test               # frontend tests
+scripts/fetch-models.sh        # downloads + verifies the bundled models (~390 MB)
+pnpm tauri dev                 # run (also builds the `speak` sidecar)
+pnpm tauri build               # .app + .dmg in target/release/bundle
+cargo test                     # Rust tests
+pnpm test                      # frontend tests
+cargo run --release -p speech-hub --example bench -- standard   # measure
 ```
 
-The debug build uses a dev-only placeholder engine (macOS `say` rendered to PCM) so the pipeline can be exercised before the real engines land in Milestone 2.
+## Docs
+
+- [docs/public-api.md](docs/public-api.md): the `speak` command, socket protocol, `speechhub://` links
+- [docs/sources.md](docs/sources.md): building Sources
+- [docs/security.md](docs/security.md): trust boundaries
+- [docs/architecture.md](docs/architecture.md), [docs/perf.md](docs/perf.md), [docs/model-licenses.md](docs/model-licenses.md)
 
 ## License
 

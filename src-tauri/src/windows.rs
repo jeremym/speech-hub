@@ -136,6 +136,16 @@ pub fn schedule_hide_player(app: &AppHandle, delay: Duration) {
 
 /// Ask a window's React tree to navigate (e.g. Preferences → "sources" pane).
 pub fn navigate(app: &AppHandle, label: &str, pane: &str) {
+    navigate_with(app, label, pane, None);
+}
+
+pub fn navigate_with(app: &AppHandle, label: &str, pane: &str, prefill: Option<serde_json::Value>) {
     show(app, label);
-    let _ = app.emit("window:navigate", serde_json::json!({ "window": label, "pane": pane }));
+    let app = app.clone();
+    let payload = serde_json::json!({ "window": label, "pane": pane, "prefill": prefill });
+    // The window may have just been created; give React a moment to mount its listener.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(250));
+        let _ = app.emit("window:navigate", payload);
+    });
 }

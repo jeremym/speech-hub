@@ -11,6 +11,7 @@ Benchmark text: 4 chunks, 285 characters, ~16 s of speech.
 |---|---|---|---|---|---|---|
 | Standard | Kokoro-82M v1.0 fp32 | 371 ms | 340 ms | **0.13** | 563 MB | 729 MB |
 | Lite | Piper amy medium int8 | 637 ms | 380 ms | **0.105** | 85 MB | 247 MB |
+| Plus | Pocket TTS int8, sample voice "bria" | 297 ms | 261 ms | **0.095** | 373 MB | 636 MB |
 
 First audio = time from request to the first chunk (one sentence, ~45 chars) being ready to play.
 RTF = synthesis time ÷ audio duration (lower is better; 0.13 = 7.7× faster than real time).
@@ -29,10 +30,11 @@ Same machine, same text, standalone spike (`max_num_sentences=1`, whole text as 
 Int8 is ~3× slower on Apple Silicon CPUs under ONNX Runtime; on an M1 with 4 threads it would
 hover near real time. fp32 costs 212 MB more on disk and ~300 MB more RSS. We took the size hit.
 
-### Pocket TTS (Plus), spike only
+### Pocket TTS (Plus)
 
-int8, 4 threads, reference-audio voice: load 256 ms, RTF **0.115**, first chunk 258 ms. Notably
-faster than Kokoro for similar quality claims; it is optional only because of licensing and gating.
+Fastest of the three and clones voices from a 10-second clip. Optional only because of licensing
+(CC-BY-4.0 with a consent clause, gated upstream). Reference-audio embedding is cached per voice by
+sherpa-onnx, so the first request with a new voice pays a little extra.
 
 ## Open measurements
 

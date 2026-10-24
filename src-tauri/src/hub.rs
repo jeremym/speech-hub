@@ -2,8 +2,8 @@
 //! request → validate → normalize → (pronunciation, M5) → segment → engine → player.
 
 use crate::{
-    accessibility, engines::{self, Engine, EngineError, ModelRoots}, playback::Player, settings::{RepeatBehavior, SettingsStore},
-    text, windows,
+    accessibility, engines::{self, Engine, EngineError, ModelRoots}, playback::Player, pronunciation::RuleStore,
+    settings::{RepeatBehavior, SettingsStore}, text, windows,
 };
 use speechhub_protocol::{EngineInfo, ErrorCode, HubState, Progress, SpeakOptions, Status, VoiceInfo};
 use std::{
@@ -66,6 +66,7 @@ struct Inner {
     app: AppHandle,
     settings: SettingsStore,
     roots: ModelRoots,
+    rules: RuleStore,
     player: Player,
     engine: Mutex<Option<Arc<dyn Engine>>>,
     status: Mutex<Status>,
@@ -80,7 +81,7 @@ pub struct Hub {
 }
 
 impl Hub {
-    pub fn new(app: AppHandle, settings: SettingsStore, roots: ModelRoots) -> Result<Self, String> {
+    pub fn new(app: AppHandle, settings: SettingsStore, roots: ModelRoots, rules: RuleStore) -> Result<Self, String> {
         let player = Player::new().map_err(|e| e.to_string())?;
         let s = settings.get();
         let hub = Hub {
@@ -88,6 +89,7 @@ impl Hub {
                 app,
                 settings,
                 roots,
+                rules,
                 player,
                 engine: Mutex::new(None),
                 status: Mutex::new(Status {
@@ -102,7 +104,78 @@ impl Hub {
             }),
         };
         hub.load_engine(&s.engine_profile);
+        hub.start_idle_watch();
         Ok(hub)
+    }
+
+    /// Text exactly as the engine will receive it: pronunciation rules, then normalization.
+    pub fn prepare(&self, text: &str) -> Vec<String> {
+        text::segment(&self.inner.rules.apply(text))
+    }
+
+    /// Unload the model to free memory. The next request reloads it.
+    pub fn unload_engine(&self) {
+        if self.is_busy() {
+            return;
+        }
+        let had = self.inner.engine.lock().unwrap().take().is_some();
+        if had {
+            log::info!("engine unloaded after idle period");
+            self.set_status(|st| {
+                st.state = HubState::Idle;
+                st.engine.loaded = false;
+            });
+        }
+    }
+
+    fn start_idle_watch(&self) {
+        let hub = self.clone();
+        std::thread::Builder::new()
+            .name("speechhub-idle".into())
+            .spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(30));
+                let minutes = hub.inner.settings.get().idle_unload_minutes;
+                if minutes == 0 || hub.is_busy() {
+                    continue;
+                }
+                let idle = hub.inner.last_activity.lock().unwrap().elapsed();
+                if idle >= Duration::from_secs(minutes as u64 * 60) && hub.inner.engine.lock().unwrap().is_some() {
+                    hub.unload_engine();
+                }
+            })
+            .expect("spawn idle watcher");
+    }
+
+    /// Engine, loading it first if it was unloaded. Blocks the caller for the load (~0.5 s).
+    fn engine_or_load(&self) -> Result<Arc<dyn Engine>, HubError> {
+        if let Some(e) = self.inner.engine.lock().unwrap().clone() {
+            return Ok(e);
+        }
+        let st = self.status();
+        if st.state == HubState::LoadingModel {
+            return Err(HubError::EngineNotReady);
+        }
+        let profile = self.inner.settings.get().engine_profile;
+        self.set_status(|st| st.state = HubState::LoadingModel);
+        match engines::create(&profile, &self.inner.roots) {
+            Ok((engine, _)) => {
+                let engine: Arc<dyn Engine> = Arc::from(engine);
+                let info = engine.info();
+                *self.inner.engine.lock().unwrap() = Some(engine.clone());
+                self.set_status(|st| {
+                    st.state = HubState::Ready;
+                    st.engine = info;
+                });
+                Ok(engine)
+            }
+            Err(e) => {
+                self.set_status(|st| {
+                    st.state = HubState::Error;
+                    st.error = Some(e.to_string());
+                });
+                Err(e.into())
+            }
+        }
     }
 
     // ---------- engine lifecycle ----------
@@ -149,16 +222,25 @@ impl Hub {
             .expect("spawn engine loader");
     }
 
-    fn engine(&self) -> Result<Arc<dyn Engine>, HubError> {
-        self.inner.engine.lock().unwrap().clone().ok_or(HubError::EngineNotReady)
-    }
-
     pub fn voices(&self) -> Vec<VoiceInfo> {
         self.inner.engine.lock().unwrap().as_ref().map(|e| e.voices()).unwrap_or_default()
     }
 
     pub fn roots(&self) -> &ModelRoots {
         &self.inner.roots
+    }
+
+    /// Voice list changed (custom voice added/removed): tell the UI, and re-validate the current voice.
+    pub fn refresh_voices(&self) {
+        let voices = self.voices();
+        let current = self.status().voice_id;
+        if !voices.is_empty() && !voices.iter().any(|v| v.id == current) {
+            let fallback = self.inner.engine.lock().unwrap().as_ref().map(|e| e.default_voice()).unwrap_or_default();
+            self.set_status(|st| st.voice_id = fallback);
+        } else {
+            self.set_status(|_| {});
+        }
+        let _ = self.inner.app.emit("voices:changed", ());
     }
 
     pub fn set_voice(&self, voice_id: &str) {
@@ -188,11 +270,12 @@ impl Hub {
 
     /// Speak now. Replaces the current reading. Returns the request id.
     pub fn speak(&self, text: &str, options: SpeakOptions) -> Result<String, HubError> {
-        let chunks = text::segment(text);
+        let chunks = self.prepare(text);
         if chunks.is_empty() {
             return Err(HubError::Invalid("nothing to speak".into()));
         }
-        let engine = self.engine()?;
+        *self.inner.last_activity.lock().unwrap() = Instant::now();
+        let engine = self.engine_or_load()?;
         self.cancel_current();
         self.inner.player.resume();
 
@@ -433,11 +516,12 @@ impl Hub {
 
     /// Synthesize to a 16-bit WAV file without playing. Blocks the caller (IPC thread).
     pub fn render(&self, text: &str, options: SpeakOptions, path: &std::path::Path) -> Result<RenderInfo, HubError> {
-        let chunks = text::segment(text);
+        let chunks = self.prepare(text);
         if chunks.is_empty() {
             return Err(HubError::Invalid("nothing to render".into()));
         }
-        let engine = self.engine()?;
+        *self.inner.last_activity.lock().unwrap() = Instant::now();
+        let engine = self.engine_or_load()?;
         let (voice, speed) = {
             let st = self.inner.status.lock().unwrap();
             (
