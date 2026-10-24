@@ -3,9 +3,9 @@
 Releases are built and signed **locally**. No Apple Developer ID, no notarization, no CI secrets.
 Integrity = sha256 of the zip + the signing certificate's leaf hash. Same pattern as ClipySecure.
 
-> **Recorded values** (fill in after the first run of `scripts/create-release-cert.sh`)
+> **Recorded values**
 > - Signing identity: `Speech Hub Release` (self-signed, 20 years)
-> - Certificate leaf SHA-1: `TBD`
+> - Certificate leaf SHA-1: `b6025fb03507222832dcb4303acaa4ac194fbd67` (created 2026-10-24)
 
 ## Why self-signed works
 TCC keys the Accessibility grant to the designated requirement

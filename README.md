@@ -54,6 +54,21 @@ cargo run --release -p speech-hub --example bench -- standard   # measure
 - [docs/security.md](docs/security.md): trust boundaries
 - [docs/architecture.md](docs/architecture.md), [docs/perf.md](docs/perf.md), [docs/model-licenses.md](docs/model-licenses.md)
 
+## Install
+
+```bash
+brew install --cask jeremym/tap/speech-hub     # also puts `speak` on your PATH
+```
+Or download `SpeechHub-x.y.z.zip` from Releases, unzip into /Applications, and on first launch use
+right-click → Open (the app is signed with the project's own certificate, not notarized).
+
+### Verifying a download
+```bash
+shasum -a 256 SpeechHub-x.y.z.zip                 # must match the .sha256 asset on the release
+codesign -d -r- "/Applications/Speech Hub.app"    # must print:
+#   designated => identifier "com.jeremym.speechhub" and certificate leaf = H"b6025fb03507222832dcb4303acaa4ac194fbd67"
+```
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE). Bundled models and libraries carry their own licenses; see `docs/model-licenses.md` (Milestone 2).
