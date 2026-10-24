@@ -140,3 +140,27 @@ fn read_wav(path: &std::path::Path) -> Result<Pcm, EngineError> {
     };
     Ok(Pcm { rate: spec.sample_rate, samples: mono })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn say_renders_pcm() {
+        let engine = DevSayEngine::new();
+        assert!(!engine.voices().is_empty(), "say -v ? returned no voices");
+        let voice = engine.default_voice();
+        let cancel = AtomicBool::new(false);
+        let pcm = engine.synthesize("Hello from Speech Hub.", &voice, 1.0, &cancel).expect("synthesis");
+        assert_eq!(pcm.rate, 22050);
+        assert!(pcm.samples.len() > 22050 / 4, "got {} samples", pcm.samples.len());
+        assert!(pcm.samples.iter().any(|s| s.abs() > 0.01), "audio is silent");
+    }
+
+    #[test]
+    fn cancel_is_honoured() {
+        let engine = DevSayEngine::new();
+        let cancel = AtomicBool::new(true);
+        assert!(matches!(engine.synthesize("x", "", 1.0, &cancel), Err(EngineError::Cancelled)));
+    }
+}
