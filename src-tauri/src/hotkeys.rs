@@ -32,8 +32,8 @@ fn on_quick_speak(app: &AppHandle, settings: &Settings) {
         QuickSpeakAction::Palette => windows::show(app, windows::PALETTE),
         QuickSpeakAction::Reader => windows::show(app, windows::READER),
         QuickSpeakAction::Source => {
-            // M4: run settings.quick_speak_source_id. Until then, fall back to the palette.
-            windows::show(app, windows::PALETTE)
+            let store = app.state::<crate::settings::SettingsStore>().inner().clone();
+            crate::sources::run_quick_speak_source(app, &store)
         }
     }
 }

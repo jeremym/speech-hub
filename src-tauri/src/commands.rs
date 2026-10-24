@@ -309,3 +309,135 @@ pub fn cli_uninstall(app: AppHandle) -> R<CliStatus> {
     }
     Ok(cli_status(app))
 }
+
+// ---------- sources ----------
+
+use crate::sources::{self, PublicSource, RunResult, Source, SourceStore, Template};
+
+impl From<sources::SourceError> for CommandError {
+    fn from(e: sources::SourceError) -> Self {
+        CommandError { code: serde_json::to_value(e.code()).unwrap().as_str().unwrap_or("internal").into(), message: e.to_string() }
+    }
+}
+
+fn sources_changed(app: &AppHandle) {
+    use tauri::Emitter;
+    let _ = app.emit(sources::CHANGED_EVENT, ());
+}
+
+#[tauri::command]
+pub fn sources_list(store: State<SourceStore>) -> Vec<Source> {
+    let mut v = store.list();
+    v.sort_by(|a, b| b.favorite.cmp(&a.favorite).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    v
+}
+
+#[tauri::command]
+pub fn sources_list_public(app: AppHandle) -> Vec<PublicSource> {
+    sources::list_public(&app)
+}
+
+#[tauri::command]
+pub fn sources_get(store: State<SourceStore>, id: String) -> Option<Source> {
+    store.get(&id)
+}
+
+/// Save from the Builder. Saving in the app is the act of trusting: the user typed the command.
+#[tauri::command]
+pub fn sources_save(app: AppHandle, store: State<SourceStore>, mut source: Source, trust: Option<bool>) -> R<Source> {
+    if let Some(t) = trust {
+        source.trusted = t;
+    }
+    let saved = store.upsert(source)?;
+    sources_changed(&app);
+    Ok(saved)
+}
+
+#[tauri::command]
+pub fn sources_delete(app: AppHandle, store: State<SourceStore>, id: String) -> R<()> {
+    store.delete(&id)?;
+    sources_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn sources_duplicate(app: AppHandle, store: State<SourceStore>, id: String) -> R<Source> {
+    let s = store.duplicate(&id)?;
+    sources_changed(&app);
+    Ok(s)
+}
+
+#[tauri::command]
+pub fn sources_run(app: AppHandle, reference: String) -> R<RunResult> {
+    // Off the main thread: commands and HTTP can take seconds.
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(sources::run_by_ref(&app, &reference));
+    });
+    Ok(rx.recv().map_err(|e| e.to_string())??)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestResult {
+    pub preview: String,
+    pub chars: usize,
+    pub fetch_ms: u128,
+    pub truncated: bool,
+}
+
+/// Fetch a draft Source's text without speaking. The Builder's "Test" button.
+#[tauri::command]
+pub fn sources_test(source: Source) -> R<TestResult> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        // A draft being tested in the Builder is by definition user-authored.
+        let mut s = source;
+        s.trusted = true;
+        let _ = tx.send(sources::fetch(&s));
+    });
+    let (text, fetch_ms) = rx.recv().map_err(|e| e.to_string())??;
+    let chars = text.chars().count();
+    let preview: String = text.chars().take(2000).collect();
+    Ok(TestResult { truncated: chars > 2000, preview, chars, fetch_ms })
+}
+
+#[tauri::command]
+pub fn sources_templates() -> Vec<Template> {
+    sources::templates()
+}
+
+/// Write the export to a path the user picked in a save dialog.
+#[tauri::command]
+pub fn sources_export(store: State<SourceStore>, path: String) -> R<()> {
+    std::fs::write(&path, store.export_json()).map_err(|e| format!("cannot write {path}: {e}"))?;
+    Ok(())
+}
+
+/// Import from a path the user picked in an open dialog (2 MB cap).
+#[tauri::command]
+pub fn sources_import(app: AppHandle, store: State<SourceStore>, path: String) -> R<usize> {
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() > 2 * 1024 * 1024 {
+        return Err("import file is larger than 2 MB".to_string().into());
+    }
+    let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let n = store.import_json(&json)?;
+    sources_changed(&app);
+    Ok(n)
+}
+
+/// Names of the user's Shortcuts, for the picker.
+#[tauri::command]
+pub fn shortcuts_list() -> Vec<String> {
+    let out = std::process::Command::new("/usr/bin/shortcuts").arg("list").output();
+    out.ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn palette_take_pending_confirm(app: AppHandle) -> Option<PublicSource> {
+    app.state::<sources::PendingConfirm>().0.lock().unwrap().take()
+}

@@ -99,3 +99,73 @@ export interface ReaderText {
 }
 
 export type WindowLabel = "onboarding" | "settings" | "reader" | "player" | "palette";
+
+// ---- Sources (M4)
+
+export type SourceKind =
+  | { type: "text"; text: string }
+  | { type: "file"; path: string }
+  | { type: "command"; program: string; args: string[]; cwd?: string | null; shell?: boolean }
+  | { type: "shortcut"; name: string; input?: string | null }
+  | { type: "http"; url: string; json_path?: string | null };
+
+export type SourceAction = "speak" | "open";
+
+export interface Source {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  kind: SourceKind;
+  voiceId: string | null;
+  speed: number | null;
+  action: SourceAction;
+  enabled: boolean;
+  trusted: boolean;
+  favorite: boolean;
+  timeoutSecs: number;
+  runCount: number;
+  lastRunAt: number | null;
+  createdAt: number;
+}
+
+export interface PublicSource {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  type: SourceKind["type"];
+  action: SourceAction;
+  enabled: boolean;
+  trusted: boolean;
+  favorite: boolean;
+  lastRunAt: number | null;
+  runCount: number;
+  summary: string;
+}
+
+export interface SourceTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  kind: SourceKind;
+  action: SourceAction;
+  needs: string[];
+}
+
+export interface RunResult {
+  sourceId: string;
+  name: string;
+  action: SourceAction;
+  chars: number;
+  fetchMs: number;
+  playbackId: string | null;
+}
+
+export interface TestResult {
+  preview: string;
+  chars: number;
+  fetchMs: number;
+  truncated: boolean;
+}

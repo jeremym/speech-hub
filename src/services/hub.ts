@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type {
-  CliStatus, HotkeyStatus, ProfileCard, ReaderText, Settings, SpeakOptions, Status, SystemInfo, VoiceInfo, WindowLabel,
+  CliStatus, HotkeyStatus, ProfileCard, PublicSource, ReaderText, RunResult, Settings, Source, SourceTemplate,
+  SpeakOptions, Status, SystemInfo, TestResult, VoiceInfo, WindowLabel,
 } from "../types";
 
 export const hub = {
@@ -35,7 +36,35 @@ export const hub = {
   cliUninstall: () => invoke<CliStatus>("cli_uninstall"),
   hideWindow: (label: WindowLabel) => invoke<void>("hide_window", { label }),
   systemInfo: () => invoke<SystemInfo>("system_info"),
+
+  sources: {
+    list: () => invoke<Source[]>("sources_list"),
+    listPublic: () => invoke<PublicSource[]>("sources_list_public"),
+    get: (id: string) => invoke<Source | null>("sources_get", { id }),
+    save: (source: Source, trust?: boolean) => invoke<Source>("sources_save", { source, trust }),
+    delete: (id: string) => invoke<void>("sources_delete", { id }),
+    duplicate: (id: string) => invoke<Source>("sources_duplicate", { id }),
+    run: (reference: string) => invoke<RunResult>("sources_run", { reference }),
+    test: (source: Source) => invoke<TestResult>("sources_test", { source }),
+    templates: () => invoke<SourceTemplate[]>("sources_templates"),
+    exportTo: (path: string) => invoke<void>("sources_export", { path }),
+    importFrom: (path: string) => invoke<number>("sources_import", { path }),
+    shortcuts: () => invoke<string[]>("shortcuts_list"),
+    takePendingConfirm: () => invoke<PublicSource | null>("palette_take_pending_confirm"),
+  },
 };
+
+/** Live list of Sources (re-fetched on `sources:changed`). */
+export function useSources(): { sources: Source[]; reload: () => void } {
+  const [sources, setSources] = useState<Source[]>([]);
+  const reload = useCallback(() => { hub.sources.list().then(setSources).catch(() => {}); }, []);
+  useEffect(() => {
+    reload();
+    const un = listen("sources:changed", reload);
+    return () => { un.then((u) => u()); };
+  }, [reload]);
+  return { sources, reload };
+}
 
 export interface CommandError { code: string; message: string }
 export function errorMessage(e: unknown): string {

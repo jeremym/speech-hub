@@ -375,10 +375,34 @@ impl Hub {
                 self.speak(&sel.text, SpeakOptions { title, ..Default::default() })
             }
             Err(e) => {
-                // M4: run settings.fallback_source_id here when configured.
+                if crate::sources::run_fallback(&self.inner.app, &self.inner.settings) {
+                    return Ok(String::new());
+                }
                 self.notice(e.to_string());
                 Err(e.into())
             }
+        }
+    }
+
+    /// Mark that a Source is fetching text (shown in the mini player while a command runs).
+    pub fn set_loading_source(&self, name: Option<&str>) {
+        let name = name.map(|n| n.to_string());
+        let busy = self.is_busy();
+        self.set_status(|st| match &name {
+            Some(n) => {
+                if !busy {
+                    st.state = HubState::LoadingSource;
+                }
+                st.title = Some(n.clone());
+            }
+            None => {
+                if st.state == HubState::LoadingSource {
+                    st.state = HubState::Ready;
+                }
+            }
+        });
+        if name.is_some() && self.inner.settings.get().show_mini_player {
+            windows::show_player(&self.inner.app);
         }
     }
 

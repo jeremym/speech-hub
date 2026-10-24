@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { hub, useHubStatus, useSettings, useVoices, errorMessage, STATE_LABEL } from "../../services/hub";
+import { hub, useHubStatus, useSettings, useSources, useVoices, errorMessage, STATE_LABEL } from "../../services/hub";
+import SourceBuilder from "../SourceBuilder/SourceBuilder";
 import { eventToShortcut, formatShortcut } from "../../lib/shortcut";
 import type { CliStatus, HotkeyStatus, ProfileCard, Settings, SystemInfo } from "../../types";
 import { Badge, Button, Card, Dots, Field, H1, Lead, Select, Toggle } from "../ui";
@@ -38,8 +39,20 @@ export function AccessibilityPane({ wizard }: PaneProps) {
         </div>
       </Card>
       {wizard && !trusted && <p className="text-[13px] text-[var(--muted)] mt-4">You can continue without it, but the main shortcut won't work until it's granted.</p>}
-      <p className="text-[13px] text-[var(--muted)] mt-4">Some apps don't expose their selection to Accessibility. In Milestone 4 you'll be able to pick a fallback Source (for example the clipboard via <code>pbpaste</code>) to run in that case.</p>
+      <FallbackSourceCard />
     </div>
+  );
+}
+
+function FallbackSourceCard() {
+  const { settings, save } = useSettings();
+  if (!settings) return null;
+  return (
+    <Card className="mt-4">
+      <Field label="When the selection can't be read" hint="Some apps hide their selection from Accessibility. Run a Source instead, e.g. “Current clipboard” after you press ⌘C.">
+        <SourcePicker value={settings.fallbackSourceId} onChange={(v) => save({ fallbackSourceId: v })} none="Just tell me" />
+      </Field>
+    </Card>
   );
 }
 
@@ -186,9 +199,14 @@ export function HotkeysPane({ wizard }: PaneProps) {
         <Field label="Pressing again while speaking" hint="What the first shortcut does if something is already playing.">
           <Select value={settings.repeatShortcut} onChange={(v) => save({ repeatShortcut: v })} options={[{ value: "replace", label: "Read the new selection" }, { value: "stop", label: "Stop" }]} />
         </Field>
-        <Field label="Quick Speak opens" hint="Running a specific Source arrives with the Source Builder (Milestone 4).">
-          <Select value={settings.quickSpeakAction} onChange={(v) => save({ quickSpeakAction: v })} options={[{ value: "palette", label: "Source palette" }, { value: "reader", label: "Blank Reader" }, { value: "source", label: "A specific Source (soon)" }]} />
+        <Field label="Quick Speak opens" hint="The palette lists all your Sources; or jump straight to one.">
+          <Select value={settings.quickSpeakAction} onChange={(v) => save({ quickSpeakAction: v })} options={[{ value: "palette", label: "Source palette" }, { value: "reader", label: "Blank Reader" }, { value: "source", label: "A specific Source" }]} />
         </Field>
+        {settings.quickSpeakAction === "source" && (
+          <Field label="Which Source" hint="Runs immediately when you press the shortcut.">
+            <SourcePicker value={settings.quickSpeakSourceId} onChange={(v) => save({ quickSpeakSourceId: v })} none="Choose a Source…" />
+          </Field>
+        )}
       </Card>
       <Card className="mt-4">
         <div className="font-medium">Already using Option+Escape for Apple's Speak Selection?</div>
@@ -279,12 +297,17 @@ speak stop`}</pre>
 // ---------------------------------------------------------------- Placeholders (M4, M5)
 
 export function SourcesPane(_: PaneProps) {
+  return <SourceBuilder />;
+}
+
+/** Dropdown of the user's Sources, with a "none" option. */
+export function SourcePicker({ value, onChange, none }: { value: string | null; onChange: (v: string | null) => void; none: string }) {
+  const { sources } = useSources();
   return (
-    <div>
-      <H1>Sources</H1>
-      <Lead>A Source tells Speech Hub where to get text: a file, a command's output, an Apple Shortcut, or a URL. Build them here without writing code.</Lead>
-      <Card><p className="text-[var(--muted)]">The Source Builder arrives in Milestone 4. Until then, use the Reader or wait for the <code>speak</code> CLI (Milestone 3).</p></Card>
-    </div>
+    <select value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-[14px] max-w-[240px]">
+      <option value="">{none}</option>
+      {sources.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
+    </select>
   );
 }
 

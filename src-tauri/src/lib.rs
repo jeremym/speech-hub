@@ -37,6 +37,8 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let settings = settings::SettingsStore::load(&data_dir);
             app.manage(settings.clone());
+            app.manage(sources::SourceStore::load(&data_dir));
+            app.manage(sources::PendingConfirm::default());
 
             let bundled = app.path().resource_dir().ok().map(|r| r.join("resources").join("models"));
             let roots = engines::ModelRoots::new(bundled, data_dir.join("models"));
@@ -92,6 +94,19 @@ pub fn run() {
             commands::cli_status,
             commands::cli_install,
             commands::cli_uninstall,
+            commands::sources_list,
+            commands::sources_list_public,
+            commands::sources_get,
+            commands::sources_save,
+            commands::sources_delete,
+            commands::sources_duplicate,
+            commands::sources_run,
+            commands::sources_test,
+            commands::sources_templates,
+            commands::sources_export,
+            commands::sources_import,
+            commands::shortcuts_list,
+            commands::palette_take_pending_confirm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Speech Hub");

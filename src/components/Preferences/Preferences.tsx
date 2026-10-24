@@ -19,7 +19,13 @@ export default function Preferences() {
   const [pane, setPane] = useState<PaneId>("general");
   useEffect(() => {
     const un = listen<{ window: string; pane: string }>("window:navigate", (e) => {
-      if (e.payload.window === "settings" && PANES.some((p) => p.id === e.payload.pane)) setPane(e.payload.pane as PaneId);
+      if (e.payload.window !== "settings") return;
+      if (e.payload.pane === "sources-new") {
+        setPane("sources");
+        setTimeout(() => window.dispatchEvent(new CustomEvent("speechhub:navigate", { detail: "sources-new" })), 50);
+        return;
+      }
+      if (PANES.some((p) => p.id === e.payload.pane)) setPane(e.payload.pane as PaneId);
     });
     return () => { un.then((u) => u()); };
   }, []);
