@@ -1,0 +1,14 @@
+[package]
+name = "speechhub-cli"
+version = "0.1.0"
+description = "`speak` — thin command-line client for Speech Hub."
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "speak"
+path = "src/main.rs"
+
+[dependencies]
+speechhub-protocol = { path = "../speechhub-protocol" }
+serde_json.workspace = true

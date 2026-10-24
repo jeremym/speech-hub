@@ -1,0 +1,39 @@
+[package]
+name = "speech-hub"
+version = "0.1.0"
+description = "Speech Hub — give anything on your Mac a voice. Local AI speech shared by every app."
+authors = ["Jeremy M"]
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "speech_hub_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+speechhub-protocol = { path = "../crates/speechhub-protocol" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+env_logger = "0.11"
+uuid = { version = "1", features = ["v4"] }
+cpal = "0.18"
+hound = "3"
+core-foundation = "0.10"
+
+[features]
+default = ["dev-say"]
+# Dev-only placeholder engine that renders speech with macOS `say` into PCM.
+# Exercises the real segment -> synth -> playback pipeline before sherpa-onnx lands (M2).
+# Must be OFF in release builds once a real engine exists.
+dev-say = []

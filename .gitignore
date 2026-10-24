@@ -1,0 +1,15 @@
+# deps / build
+node_modules/
+dist/
+target/
+src-tauri/gen/
+*.log
+
+# models are fetched by scripts/fetch-models.sh, never committed
+src-tauri/resources/models/*
+!src-tauri/resources/models/.gitkeep
+!src-tauri/resources/models/MANIFEST.json
+
+# local notes
+.context/
+.DS_Store

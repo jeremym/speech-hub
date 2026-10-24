@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "All Speech Hub windows talk to the hub through app commands only.",
+  "windows": ["onboarding", "settings", "reader", "player", "palette"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-is-visible",
+    "opener:allow-open-url",
+    "dialog:allow-open"
+  ]
+}
