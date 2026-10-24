@@ -15,3 +15,5 @@ src-tauri/resources/models/*
 .context/
 .DS_Store
 binaries/
+dist/
+*.p12
