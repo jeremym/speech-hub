@@ -60,6 +60,11 @@ pub fn update_settings(app: AppHandle, store: State<SettingsStore>, settings: Se
             log::warn!("launch at login: {e}");
         }
     }
+    {
+        // Other open windows (player, palette, Reader) re-read settings on this.
+        use tauri::Emitter;
+        let _ = app.emit("settings:changed", ());
+    }
     Ok(after)
 }
 

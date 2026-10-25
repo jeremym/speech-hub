@@ -34,11 +34,9 @@ only from same-user callers or after an in-app confirmation.
 
 ## Permissions the OS asks for
 
-- **Accessibility**: to read the selection in other apps. Requested in onboarding, never required Capture may set `AXEnhancedUserInterface` on a browser so it builds its accessibility tree (the same thing VoiceOver does); that flag is left on only for apps that needed it to answer, and it is never set on an app that answered directly.
+- **Accessibility**: to read the selection in other apps. Requested in onboarding, never required for the CLI or Sources. Capture may set `AXEnhancedUserInterface` on a browser so it builds its accessibility tree (the same thing VoiceOver does); that flag is left on only for apps that needed it to answer, and it is never set on an app that answered directly.
 - **Microphone**: only when you click "Record a voice" in Preferences → Voices (custom Plus voices). Hardened-runtime entitlement `com.apple.security.device.audio-input`; the recording is encoded to WAV in the window and handed to the voice library, nothing is kept beyond the trimmed reference clip.
 - **Services menu**: macOS passes the selected text on a private Services pasteboard. Speech Hub reads that pasteboard only inside the service call; it never reads or writes the general clipboard.
-  for the CLI or Sources.
-- **Microphone**: not requested (voices are added from WAV files; recording is a later feature).
 
 ## Reporting
 
