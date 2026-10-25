@@ -86,6 +86,8 @@ struct Inner {
     /// A background capture for the palette is still running.
     selection_pending: AtomicBool,
     selection_generation: AtomicU64,
+    /// Cancels the selection capture in flight (stop button while "waking up" an app).
+    capture_cancel: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 #[derive(Clone)]
@@ -117,6 +119,7 @@ impl Hub {
                 selection_snapshot: Mutex::new(None),
                 selection_pending: AtomicBool::new(false),
                 selection_generation: AtomicU64::new(0),
+                capture_cancel: Mutex::new(None),
             }),
         };
         hub.load_engine(&s.engine_profile);
@@ -407,8 +410,12 @@ impl Hub {
     pub fn stop(&self) {
         let had_job = self.inner.job.lock().unwrap().is_some();
         self.cancel_current();
+        if let Some(c) = self.inner.capture_cancel.lock().unwrap().take() {
+            c.store(true, Ordering::SeqCst);
+        }
         self.inner.player.resume();
-        if had_job || self.status().state == HubState::Paused {
+        let state = self.status().state;
+        if had_job || state == HubState::Paused || state == HubState::LoadingSource {
             self.set_status(|st| {
                 st.state = HubState::Ready;
                 st.request_id = None;
@@ -468,9 +475,10 @@ impl Hub {
         windows::show(&self.inner.app, windows::PALETTE);
         let Some(target) = target else { return };
         self.inner.selection_pending.store(true, Ordering::SeqCst);
+        let cancel = self.new_capture_cancel();
         let hub = self.clone();
         std::thread::spawn(move || {
-            let snap = target.capture(accessibility::WARMUP_BUDGET, |_| {}).ok();
+            let snap = target.capture(accessibility::WARMUP_BUDGET, &cancel, |_| {}).ok();
             if hub.inner.selection_generation.load(Ordering::SeqCst) == generation {
                 let found = snap.is_some();
                 *hub.inner.selection_snapshot.lock().unwrap() = snap.map(|s| (s, Instant::now()));
@@ -491,6 +499,12 @@ impl Hub {
         }
         let words: String = sel.text.split_whitespace().take(12).collect::<Vec<_>>().join(" ");
         Some(SelectionPreview { preview: words, chars: sel.text.chars().count(), app_name: sel.app_name.clone() })
+    }
+
+    fn new_capture_cancel(&self) -> Arc<AtomicBool> {
+        let cancel = Arc::new(AtomicBool::new(false));
+        *self.inner.capture_cancel.lock().unwrap() = Some(cancel.clone());
+        cancel
     }
 
     fn has_snapshot(&self) -> bool {
@@ -529,6 +543,7 @@ impl Hub {
                 Err(e) => return Err(self.selection_failed(e)),
             }
         };
+        let cancel = self.new_capture_cancel();
         let hub = self.clone();
         std::thread::spawn(move || {
             let slowed = AtomicBool::new(false);
@@ -538,7 +553,7 @@ impl Hub {
                     .ok_or(AxError::NoFocusedElement)
                     .or_else(|_| accessibility::Target::frontmost())
                     .and_then(|t| {
-                        t.capture(accessibility::WARMUP_BUDGET, |name| {
+                        t.capture(accessibility::WARMUP_BUDGET, &cancel, |name| {
                             slowed.store(true, Ordering::SeqCst);
                             let name = name.unwrap_or("this app");
                             hub.set_loading_source(Some(&format!("Waking up {name}’s accessibility…")));
@@ -549,6 +564,7 @@ impl Hub {
                 hub.set_loading_source(None);
             }
             match captured {
+                Err(AxError::Cancelled) => {}
                 Ok(sel) => {
                     let title = Some(match sel.app_name {
                         Some(app) => format!("Selection from {app}"),

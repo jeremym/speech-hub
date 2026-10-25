@@ -242,3 +242,18 @@ speech-hub/
 - Apple: [AVSpeechSynthesisProviderAudioUnit](https://developer.apple.com/documentation/avfaudio/avspeechsynthesisprovideraudiounit.md), [Creating a custom speech synthesizer](https://developer.apple.com/documentation/avfaudio/creating-a-custom-speech-synthesizer.md)
 - Competitors: [aloud-tts](https://pypi.org/project/aloud-tts), [Sotto](https://www.hunted.space/dashboard/sotto-7), [Kokori](https://feedbagel.com/post/kokori-macos-text-to-speech-app-with-local-api-server-and-desktop-interface)
 - Tauri 2 plugins: [global-shortcut 2.0.0](https://v2.tauri.app/de/release/global-shortcut/v2.0.0/), [single-instance macOS](https://v2.tauri.app/release/single-instance/v2.0.0-beta.5/)
+
+## 13. Backlog (from hands-on testing, 2026-10-25)
+
+Not scheduled; pick up after M7 ships.
+
+| Item | Notes |
+|---|---|
+| Selection inside TUI apps in Ghostty (e.g. Claude Code's input box) | Ghostty's `AXTextArea` returns empty strings for ranges; TUI mouse reporting may also swallow the drag. Investigate with `examples/axcap.rs` + the watcher probe; likely needs an upstream Ghostty fix or the clipboard fallback Source. |
+| Verify tiling under AeroSpace | Document windows now switch the app to the Regular activation policy while open (Dock icon appears). Confirm AeroSpace tiles Preferences/Reader; if not, try `NSWindow` style/level tweaks. |
+| Pre-warm browser accessibility | Set `AXEnhancedUserInterface` when a known browser becomes frontmost so the first ⌥⎋ after launch is instant, instead of ~3 s. |
+| Microphone recording for custom Plus voices | Currently file import only. |
+| Universal (x86_64) build | Needs the rustup target. |
+| Services menu, Shortcuts actions, `AVSpeechSynthesisProvider` | Deeper system integration. |
+| Kokoro ja/zh quality, Pocket speed parameter | Engine follow-ups. |
+

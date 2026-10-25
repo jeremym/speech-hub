@@ -69,6 +69,7 @@ pub fn run() {
                 if windows::ALL.contains(&window.label()) {
                     api.prevent_close();
                     let _ = window.hide();
+                    windows::sync_activation_policy(window.app_handle());
                 }
             }
         })

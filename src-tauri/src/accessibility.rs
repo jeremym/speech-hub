@@ -18,6 +18,7 @@ use core_foundation::{
     string::{CFString, CFStringRef},
 };
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 type AXUIElementRef = *const c_void;
@@ -62,8 +63,12 @@ pub enum AxError {
     NotTrusted,
     #[error("No app or text field has keyboard focus")]
     NoFocusedElement,
-    #[error("Nothing is selected, or this app doesn't expose its selection to Accessibility")]
+    #[error("Nothing is selected")]
     NoSelection,
+    #[error("This app doesn't expose its selected text to Accessibility")]
+    Unavailable,
+    #[error("Cancelled")]
+    Cancelled,
     #[error("Accessibility error {0}")]
     Other(i32),
 }
@@ -238,13 +243,22 @@ impl Target {
     /// If the slow path produced the selection, the flag stays on: that app demonstrably needs it,
     /// and turning it back off would make every later capture pay the multi-second warm-up again.
     /// If it produced nothing, the flag is restored so ordinary apps are left exactly as found.
-    pub fn capture(&self, budget: Duration, on_slow: impl FnOnce(Option<&str>)) -> Result<Selection, AxError> {
+    ///
+    /// Fails fast when the app answers "nothing selected" outright (a text view with an empty
+    /// selection range); only an app that exposes no text at all is worth waking up.
+    /// `cancel` aborts the wait (the mini player's stop button).
+    pub fn capture(
+        &self,
+        budget: Duration,
+        cancel: &AtomicBool,
+        on_slow: impl FnOnce(Option<&str>),
+    ) -> Result<Selection, AxError> {
         match capture_once(&self.app) {
             Ok(text) => {
                 log::debug!("selection: direct");
                 return Ok(self.selection(text));
             }
-            Err(AxError::NotTrusted) => return Err(AxError::NotTrusted),
+            Err(e @ (AxError::NotTrusted | AxError::NoSelection)) => return Err(e),
             Err(_) => {}
         }
 
@@ -260,10 +274,19 @@ impl Target {
         let mut result = Err(AxError::NoSelection);
         while started.elapsed() < budget {
             std::thread::sleep(WARMUP_POLL);
+            if cancel.load(Ordering::SeqCst) {
+                result = Err(AxError::Cancelled);
+                break;
+            }
             match capture_once(&self.app) {
                 Ok(text) => {
                     log::debug!("selection: after warm-up ({} ms)", started.elapsed().as_millis());
                     result = Ok(self.selection(text));
+                    break;
+                }
+                // The tree arrived and says nothing is selected: stop waiting.
+                Err(AxError::NoSelection) => {
+                    result = Err(AxError::NoSelection);
                     break;
                 }
                 Err(e) => result = Err(e),
@@ -292,58 +315,74 @@ fn frontmost_pid_appkit() -> Option<libc::pid_t> {
     Some(app.processIdentifier())
 }
 
+/// What one element says about the selection.
+enum Probe {
+    Found(String),
+    /// The element speaks the text protocol and reports an empty selection: a real answer.
+    Empty,
+    /// The element has no text protocol at all.
+    Unknown,
+}
+
 /// One capture attempt: the focused element's selection, then its ancestors up to the window.
 /// A focused link or button inside a selected paragraph won't carry the selection, but the web
 /// area above it does; Gecko sometimes focuses a container rather than the document.
+///
+/// `NoSelection` means some element in the chain answered "empty"; `Unavailable` or
+/// `NoFocusedElement` means nobody exposed text, which is what a cold browser looks like.
 fn capture_once(app: &Element) -> Result<String, AxError> {
     let focused = app.child("AXFocusedUIElement").map_err(|e| match e {
         AxError::NoSelection => AxError::NoFocusedElement,
         other => other,
     })?;
-    if let Some(t) = selection_of(&focused) {
-        return Ok(t);
-    }
+    let mut saw_empty = false;
     let mut el = focused;
-    for _ in 0..6 {
-        let Ok(parent) = el.child("AXParent") else { break };
-        if let Some(t) = selection_of(&parent) {
-            return Ok(t);
+    for depth in 0..7 {
+        match selection_of(&el) {
+            Probe::Found(t) => return Ok(t),
+            Probe::Empty => saw_empty = true,
+            Probe::Unknown => {}
         }
-        if parent.string_attr("AXRole").map(|r| r == "AXWindow").unwrap_or(false) {
+        if depth == 6 || el.string_attr("AXRole").map(|r| r == "AXWindow").unwrap_or(false) {
             break;
         }
+        let Ok(parent) = el.child("AXParent") else { break };
         el = parent;
     }
-    Err(AxError::NoSelection)
+    Err(if saw_empty { AxError::NoSelection } else { AxError::Unavailable })
 }
 
 /// Three dialects: plain `AXSelectedText` (AppKit, Chromium once awake), range + string
 /// (AppKit, Ghostty), and text markers (Firefox, Safari/WebKit).
-fn selection_of(el: &Element) -> Option<String> {
+fn selection_of(el: &Element) -> Probe {
+    let mut answered = false;
     if let Ok(text) = el.string_attr("AXSelectedText") {
+        answered = true;
         if !text.trim().is_empty() {
-            return Some(text);
+            return Probe::Found(text);
         }
     }
     if let Ok(range) = el.attr("AXSelectedTextRange") {
+        answered = true;
         if let Ok(v) = el.param_attr("AXStringForRange", &range) {
             if let Some(text) = cf_to_string(&v) {
                 if !text.trim().is_empty() {
-                    return Some(text);
+                    return Probe::Found(text);
                 }
             }
         }
     }
     if let Ok(range) = el.attr("AXSelectedTextMarkerRange") {
         if let Ok(v) = el.param_attr("AXStringForTextMarkerRange", &range) {
+            answered = true;
             if let Some(text) = cf_to_string(&v) {
                 if !text.trim().is_empty() {
-                    return Some(text);
+                    return Probe::Found(text);
                 }
             }
         }
     }
-    None
+    if answered { Probe::Empty } else { Probe::Unknown }
 }
 
 /// Deep link into System Settings → Privacy & Security → Accessibility.

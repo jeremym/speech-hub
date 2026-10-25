@@ -20,7 +20,7 @@ fn ensure(app: &AppHandle, label: &str) -> tauri::Result<tauri::WebviewWindow> {
     let builder = WebviewWindowBuilder::new(app, label, url);
     let builder = match label {
         ONBOARDING => builder.title("Welcome to Speech Hub").inner_size(760.0, 580.0).resizable(false).center(),
-        SETTINGS => builder.title("Speech Hub Preferences").inner_size(760.0, 540.0).min_inner_size(640.0, 440.0).center(),
+        SETTINGS => builder.title("Speech Hub Preferences").inner_size(860.0, 620.0).min_inner_size(700.0, 480.0).center(),
         READER => builder.title("Reader").inner_size(640.0, 480.0).min_inner_size(420.0, 300.0).center(),
         PALETTE => builder
             .title("Quick Speak")
@@ -76,11 +76,32 @@ fn on_main(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
     }
 }
 
+/// Windows that should behave like a normal app's windows: tiled by window managers, in the
+/// Cmd-Tab list, with a Dock icon while open. The menu-bar-only policy returns when they close.
+const DOCUMENT_WINDOWS: [&str; 3] = [SETTINGS, READER, ONBOARDING];
+
+fn is_document(label: &str) -> bool {
+    DOCUMENT_WINDOWS.contains(&label)
+}
+
+/// Regular while any document window is visible, Accessory otherwise. Main thread only.
+pub fn sync_activation_policy(app: &AppHandle) {
+    let any_visible = DOCUMENT_WINDOWS.iter().any(|l| is_visible(app, l));
+    let policy = if any_visible { tauri::ActivationPolicy::Regular } else { tauri::ActivationPolicy::Accessory };
+    if let Err(e) = app.set_activation_policy(policy) {
+        log::warn!("set_activation_policy: {e}");
+    }
+}
+
 /// Show and focus a regular window.
 pub fn show(app: &AppHandle, label: &str) {
     let label = label.to_string();
     on_main(app, move |app| match ensure(app, &label) {
         Ok(w) => {
+            if is_document(&label) {
+                // Before showing, so the window manager sees a regular app's window from the start.
+                let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+            }
             let _ = w.show();
             let _ = w.unminimize();
             let _ = w.set_focus();
@@ -113,6 +134,9 @@ pub fn hide(app: &AppHandle, label: &str) {
         // The palette took keyboard focus; hand it back to the app the user was in.
         if label == PALETTE {
             crate::macos::deactivate_app();
+        }
+        if is_document(&label) {
+            sync_activation_policy(app);
         }
     });
 }

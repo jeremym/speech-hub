@@ -1,6 +1,7 @@
 //! Manual check of selection capture against whatever app is frontmost.
 //! `cargo run --example axcap -- [delay_secs]` from a terminal that has Accessibility permission.
 use speech_hub_lib::accessibility::{Target, WARMUP_BUDGET};
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 fn main() {
@@ -18,7 +19,8 @@ fn main() {
         },
     };
     println!("target: {}", target.app_name.clone().unwrap_or_default());
-    match target.capture(WARMUP_BUDGET, |name| println!("slow path for {name:?} at {} ms", t0.elapsed().as_millis())) {
+    let cancel = AtomicBool::new(false);
+    match target.capture(WARMUP_BUDGET, &cancel, |name| println!("slow path for {name:?} at {} ms", t0.elapsed().as_millis())) {
         Ok(sel) => println!("ok after {} ms ({} chars): {}", t0.elapsed().as_millis(), sel.text.chars().count(), sel.text.chars().take(80).collect::<String>()),
         Err(e) => {
             println!("failed after {} ms: {e}", t0.elapsed().as_millis());
