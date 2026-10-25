@@ -93,6 +93,14 @@ struct Inner {
     snapshot_claimed: AtomicBool,
     /// Serializes cold engine loads after an idle unload (two requests must not load twice).
     load_lock: Mutex<()>,
+    /// An engine load is in flight (startup, profile switch, or a cold reload). Tracked apart from
+    /// `Status.state`, which a request may already have moved to Synthesizing.
+    loading: AtomicBool,
+}
+
+/// States owned by an in-flight request; engine-load bookkeeping must not overwrite them.
+fn job_state(state: HubState) -> bool {
+    matches!(state, HubState::Synthesizing | HubState::Playing | HubState::Paused)
 }
 
 #[derive(Clone)]
@@ -127,6 +135,7 @@ impl Hub {
                 capture_cancel: Mutex::new(None),
                 snapshot_claimed: AtomicBool::new(false),
                 load_lock: Mutex::new(()),
+                loading: AtomicBool::new(false),
             }),
         };
         hub.load_engine(&s.engine_profile);
@@ -184,7 +193,7 @@ impl Hub {
             if let Some(e) = self.inner.engine.lock().unwrap().clone() {
                 return Ok(e);
             }
-            if self.status().state != HubState::LoadingModel {
+            if !self.inner.loading.load(Ordering::SeqCst) {
                 break;
             }
             if Instant::now() >= deadline {
@@ -197,14 +206,22 @@ impl Hub {
             return Ok(e);
         }
         let profile = self.inner.settings.get().engine_profile;
-        self.set_status(|st| st.state = HubState::LoadingModel);
-        match engines::create(&profile, &self.inner.roots) {
+        self.inner.loading.store(true, Ordering::SeqCst);
+        // A request may already own the state (Synthesizing); only an idle hub shows "loading".
+        self.set_status(|st| {
+            if !job_state(st.state) {
+                st.state = HubState::LoadingModel;
+            }
+        });
+        let result = match engines::create(&profile, &self.inner.roots) {
             Ok((engine, _)) => {
                 let engine: Arc<dyn Engine> = Arc::from(engine);
                 let info = engine.info();
                 *self.inner.engine.lock().unwrap() = Some(engine.clone());
                 self.set_status(|st| {
-                    st.state = HubState::Ready;
+                    if !job_state(st.state) {
+                        st.state = HubState::Ready;
+                    }
                     st.engine = info;
                 });
                 Ok(engine)
@@ -216,7 +233,9 @@ impl Hub {
                 });
                 Err(e.into())
             }
-        }
+        };
+        self.inner.loading.store(false, Ordering::SeqCst);
+        result
     }
 
     // ---------- engine lifecycle ----------
@@ -224,6 +243,7 @@ impl Hub {
     /// Load (or switch to) an engine profile on a worker thread. State: LoadingModel → Ready | Error.
     pub fn load_engine(&self, profile: &str) {
         self.cancel_current();
+        self.inner.loading.store(true, Ordering::SeqCst);
         self.set_status(|st| {
             st.state = HubState::LoadingModel;
             st.error = None;
@@ -244,13 +264,17 @@ impl Hub {
                     }
                     *hub.inner.engine.lock().unwrap() = Some(engine);
                     hub.set_status(|st| {
-                        st.state = HubState::Ready;
+                        // A request that arrived during the load already owns the state.
+                        if !job_state(st.state) {
+                            st.state = HubState::Ready;
+                        }
                         st.engine = info;
                         st.voice_id = voice;
                     });
                     if actual_id != profile {
                         log::warn!("requested engine '{profile}', running '{actual_id}'");
                     }
+                    hub.inner.loading.store(false, Ordering::SeqCst);
                 }
                 Err(e) => {
                     *hub.inner.engine.lock().unwrap() = None;
@@ -258,6 +282,7 @@ impl Hub {
                         st.state = HubState::Error;
                         st.error = Some(e.to_string());
                     });
+                    hub.inner.loading.store(false, Ordering::SeqCst);
                 }
             })
             .expect("spawn engine loader");
@@ -418,6 +443,10 @@ impl Hub {
         if slot.as_ref().map(|j| j.id.as_str()) == Some(job.id.as_str()) {
             *slot = None;
             drop(slot);
+            match &error {
+                Some(e) => log::warn!("request {} failed: {e}", job.id),
+                None => log::info!("request {} done", job.id),
+            }
             self.set_status(|st| {
                 st.state = if error.is_some() { HubState::Error } else { HubState::Ready };
                 st.error = error;
