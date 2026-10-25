@@ -87,6 +87,35 @@ export function Dots({ value, max = 5 }: { value: number; max?: number }) {
   );
 }
 
+/** A keyboard shortcut, always in the accent colour so it reads as “keys you press”. */
+export function Kbd({ children, size = "sm", className = "" }: { children: ReactNode; size?: "sm" | "lg"; className?: string }) {
+  const sz = size === "lg" ? "px-2.5 py-1 text-[17px]" : "px-1.5 py-0.5 text-[13px]";
+  return <kbd className={`inline-flex items-center rounded-md border border-[var(--accent)]/40 bg-[var(--accent)]/12 font-mono font-semibold tracking-wide text-[var(--accent)] ${sz} ${className}`}>{children}</kbd>;
+}
+
+/** A titled settings block: what it is in the header, the controls underneath. `aside` sits in the header's right corner (a shortcut, a status badge). */
+export function Section({ title, description, aside, children, className = "" }: {
+  title: ReactNode; description?: ReactNode; aside?: ReactNode; children?: ReactNode; className?: string;
+}) {
+  return (
+    <section className={`rounded-xl border border-[var(--border)] bg-[var(--panel)] overflow-hidden ${className}`}>
+      <header className="flex items-start justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel-2)]/50 px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-[16px] font-semibold leading-tight">{title}</h2>
+          {description && <p className="text-[13px] text-[var(--muted)] mt-1">{description}</p>}
+        </div>
+        {aside && <div className="shrink-0 flex items-center gap-2">{aside}</div>}
+      </header>
+      {children && <div className="px-4 py-1">{children}</div>}
+    </section>
+  );
+}
+
+/** Small explanatory paragraph; `tone="warn"` for conflicts and problems. */
+export function Note({ children, tone = "muted", className = "" }: { children: ReactNode; tone?: "muted" | "warn"; className?: string }) {
+  return <p className={`text-[13px] ${tone === "warn" ? "text-[var(--danger)]" : "text-[var(--muted)]"} ${className}`}>{children}</p>;
+}
+
 export function H1({ children }: { children: ReactNode }) {
   return <h1 className="text-[22px] font-semibold tracking-tight mb-1">{children}</h1>;
 }

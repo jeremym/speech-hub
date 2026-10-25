@@ -18,6 +18,7 @@
 			<string>Speech Hub</string>
 			<key>NSSendTypes</key>
 			<array>
+				<string>NSStringPboardType</string>
 				<string>public.utf8-plain-text</string>
 			</array>
 		</dict>
@@ -33,6 +34,7 @@
 			<string>Speech Hub</string>
 			<key>NSSendTypes</key>
 			<array>
+				<string>NSStringPboardType</string>
 				<string>public.utf8-plain-text</string>
 			</array>
 		</dict>

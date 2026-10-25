@@ -38,8 +38,10 @@ codesign -d -r- "/Applications/Speech Hub.app"          # leaf hash matches the 
 ```
 
 ## Notes
-- Arm64 only for now: the Homebrew Rust toolchain has no `x86_64-apple-darwin` target. A universal
-  build needs rustup (`rustup target add x86_64-apple-darwin`) and `pnpm tauri build --target universal-apple-darwin`.
+- **Apple Silicon only (decision, 2026-10-25).** No universal build for v1. Reasons: no Intel Mac to
+  verify on (an untested x86_64 slice would be faking it), a universal bundle roughly doubles the
+  sherpa-onnx/ONNX Runtime payload, and the Homebrew toolchain has no `x86_64-apple-darwin` target.
+  Revisit only on a concrete request; the recipe is rustup + `pnpm tauri build --target universal-apple-darwin`.
 - Hardened runtime is on (Tauri default). The only entitlement is `com.apple.security.device.audio-input`
   (`Entitlements.plist`) for "Record a voice"; audio output, Accessibility and the socket need none.
 - Tauri skips notarization unless `APPLE_ID`/`APPLE_API_KEY` env vars are set. Leave them unset.

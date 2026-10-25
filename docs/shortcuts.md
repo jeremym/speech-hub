@@ -47,6 +47,8 @@ Stopping, pausing, resuming: `speak stop`, `speak pause`, `speak resume`.
 
 Select text in any app, then right-click → Services → **Speak with Speech Hub**, or **Open in Speech Hub Reader**. Assign a keyboard shortcut to either in System Settings → Keyboard → Keyboard Shortcuts → Services → Text. This path uses the text the app hands to the Services pasteboard, so it works in apps whose Accessibility selection Speech Hub can't read.
 
+If the items don't appear: macOS re-reads an app's services when it is launched, so quit and reopen Speech Hub (or log out and in). Chromium browsers advertise the legacy `NSStringPboardType` pasteboard type, so the services declare that type alongside `public.utf8-plain-text`. Each service can be switched on or off under System Settings → Keyboard → Keyboard Shortcuts → Services → Text.
+
 ## Shell scripts, cron, Makefiles
 
 ```sh

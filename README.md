@@ -57,6 +57,8 @@ cargo run --release -p speech-hub --example bench -- standard   # measure
 
 ## Install
 
+Requires an Apple Silicon Mac (M1 or later) running macOS 13 or newer. There is no Intel build.
+
 ```bash
 brew install --cask jeremym/tap/speech-hub     # also puts `speak` on your PATH
 ```

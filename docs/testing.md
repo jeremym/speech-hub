@@ -13,7 +13,7 @@ Tick every row on a real Mac before calling a build done. ⌥⎋ = Speak selecti
 | Firefox | instant | |
 | VS Code / Cursor | speech (Electron = Chromium path) | |
 | Ghostty, plain shell output | speech | |
-| Ghostty, Claude Code input box | open: see backlog | |
+| Ghostty while Claude Code runs | selection clears within seconds (Claude Code redraws); with fallback Source = Current clipboard, ⌥⎋ still speaks it | |
 | Terminal.app / iTerm2 | speech | |
 | Slack / Discord | speech | |
 | PDF in Preview | speech | |
@@ -41,7 +41,7 @@ Tick every row on a real Mac before calling a build done. ⌥⎋ = Speak selecti
 
 | Path | Expect | ✓ |
 |---|---|---|
-| Right-click text → Services → Speak with Speech Hub | speaks | |
+| Right-click text → Services → Speak with Speech Hub (TextEdit, Safari, Chrome) | item listed; speaks. If missing: relaunch the app, then System Settings → Keyboard → Keyboard Shortcuts → Services → Text | |
 | Right-click text → Services → Open in Speech Hub Reader | Reader opens with text | |
 | `speak "hello"` | speaks | |
 | `echo hi \| speak` | speaks | |

@@ -265,15 +265,26 @@ Stored as `settings.json` in the app data dir, written atomically via a `.tmp` r
 
 ## Open questions the author flagged
 
-- Universal build: install rustup alongside Homebrew Rust, or stay arm64-only? `PLAN.md` §13.
+- ~~Universal build~~ Decided 2026-10-25: Apple Silicon only for v1 (no Intel Mac to verify on; doubles the ONNX payload). `docs/release.md`.
 - App Intents and `AVSpeechSynthesisProvider`: add an Xcode/Swift subproject, or keep the CLI/deep-link/Services route documented in `docs/shortcuts.md`? `PLAN.md` §13, `Status.md`.
 - Kokoro int8 vs fp16 "decide by ear in M2" was resolved as fp32 by measurement; the Obsidian "Open" block still lists it; `Speech Hub/Decisions.md`, `PLAN.md` §11.
 - `speak -o file.wav` in v1 ("leaning yes") is implemented as `render`; `PLAN.md` §11 still lists it as open.
 - Idle-unload default minutes: "decide after measuring reload time"; still 0; `PLAN.md` §11.
 - Flag left on after a successful Chromium warm-up: "flag left on once proven needed"; proven needed and kept on, but the tradeoff (browser keeps a full AX tree) is acknowledged, not resolved; `PLAN.md` §9, `src-tauri/src/accessibility.rs`.
-- Ghostty TUI selection: needs a real repro with the watcher probe; `PLAN.md` §13.
+- ~~Ghostty TUI selection~~ Reproduced 2026-10-25: Ghostty exposes the selection, but Claude Code's redraws clear it within seconds. Supported path is the fallback Source = Current clipboard (Ghostty copies on select). `PLAN.md` §13.
 - Whether to re-measure on an M1 8 GB before release; `PLAN.md` §4, `docs/perf.md`.
 - Pocket TTS license wording: the sherpa tarball README says "non-commercial" while the LICENSE file is plain CC-BY-4.0; the app shows CC-BY-4.0 plus the consent clause; `docs/model-licenses.md`, `src-tauri/resources/models/plus/README.md`.
 - `shortcuts run` output quirks were flagged as a risk to "verify early in M4"; the implementation uses `--output-path`/`--output-type` and falls back to stdout, but no verification note was recorded; `PLAN.md` §9, `src-tauri/src/sources/exec.rs`.
 - Where the espeak-ng data files are extracted at runtime (a temp dir on first use) and whether that survives hardened-runtime/sandbox changes; `docs/model-licenses.md`.
 - The "Apple's built-in speech" card reads `defaults` for `com.apple.universalaccess`; whether those keys are stable across macOS versions is unverified (verified on macOS 26 only); `src-tauri/src/commands.rs`.
+
+## Preferences UI round (2026-10-25)
+
+- Every settings group is a `Section`: title and a one-line description in a shaded header, controls underneath; `src/components/ui.tsx`.
+- Keyboard shortcuts are always rendered with `Kbd` in the accent colour, so "keys you press" is one visual idea across all windows; the shortcut recorder itself is the big key-cap chip in the section header; `src/components/ui.tsx`, `src/components/Preferences/panes.tsx`.
+- Speak Selection and Quick Speak are two separate sections, each ending with a "Right now: press X → does Y" sentence built from the live settings; `panes.tsx`.
+- The fallback Source ("If the text can't be read") moved from Accessibility to Shortcuts → Speak Selection, where the shortcut it modifies lives; Accessibility only points there; `panes.tsx`.
+- Vocabulary fixed app-wide and listed under About → "The words Speech Hub uses": Speak Selection, Quick Speak, Quick Speak panel, Source, Reader, Mini player, Engine, Voice, Pronunciation rule. "Palette" is never shown to users; `panes.tsx`.
+- Preferences nav is grouped: App (General, Accessibility) · Speech (Engine, Voices, Pronunciation) · Ways to speak (Shortcuts, Sources, Command line) · About; `Preferences.tsx`.
+- Engine badges lost their milestone jargon: Included / Installed / Optional download / Missing from this build / In use; `panes.tsx`.
+- Services declare `NSStringPboardType` alongside `public.utf8-plain-text`: Chromium's `validRequestorForSendType:` compares against the legacy constant, so UTI-only services never appear in Chrome/Brave context menus; `src-tauri/Info.plist`.

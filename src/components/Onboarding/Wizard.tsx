@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { hub } from "../../services/hub";
 import { AccessibilityPane, CliPane, EnginePane, HotkeysPane, VoicesPane } from "../Preferences/panes";
-import { Button, H1, Lead } from "../ui";
+import { Button, H1, Kbd, Lead } from "../ui";
 
 function Welcome() {
   return (
@@ -9,10 +9,10 @@ function Welcome() {
       <H1>Welcome to Speech Hub</H1>
       <Lead>Give anything on your Mac a voice.</Lead>
       <ul className="space-y-3 text-[15px]">
-        <li><strong>Select text anywhere, press ⌥⎋,</strong> and hear it read by a natural AI voice.</li>
+        <li><strong>Highlight text anywhere, press <Kbd>⌥⎋</Kbd>,</strong> and hear it read by a natural AI voice. That shortcut is called <strong>Speak Selection</strong>.</li>
         <li><strong>Everything stays on this Mac.</strong> No account, no cloud, no telemetry.</li>
         <li><strong>Any app can speak through it.</strong> Scripts, Shortcuts, your clipboard manager, your own tools.</li>
-        <li><strong>Build your own Sources</strong> that pull text from files, commands, or URLs. No code needed.</li>
+        <li><strong>Build your own Sources</strong>: saved places to get text from, like your clipboard, a file, a command, or a web address. No code needed.</li>
       </ul>
       <p className="text-[13px] text-[var(--muted)] mt-6">This short setup takes about a minute. Every step is also in Preferences later.</p>
     </div>
@@ -25,8 +25,8 @@ function Done() {
       <H1>You're set</H1>
       <Lead>Speech Hub is running in your menu bar.</Lead>
       <ul className="space-y-3 text-[15px]">
-        <li>Highlight some text in any app and press <kbd className="font-mono">⌥⎋</kbd>.</li>
-        <li>Press <kbd className="font-mono">⌥⇧⎋</kbd> for Quick Speak.</li>
+        <li>Highlight some text in any app and press <Kbd>⌥⎋</Kbd> (Speak Selection).</li>
+        <li>Press <Kbd>⌥⇧⎋</Kbd> for Quick Speak: type text, run a Source, or open the Reader.</li>
         <li>Click the waveform icon in the menu bar for everything else.</li>
       </ul>
     </div>

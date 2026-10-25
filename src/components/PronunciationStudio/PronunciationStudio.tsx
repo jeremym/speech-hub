@@ -48,7 +48,7 @@ export default function PronunciationStudio() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-4">
-        <div><H1>Pronunciation Studio</H1><Lead>Teach Speech Hub how to say a name or a term once. The fix applies to every app, Source, and the <code>speak</code> command. What you see in the Reader never changes; only what the engine hears.</Lead></div>
+        <div><H1>Pronunciation Studio</H1><Lead>A <strong>pronunciation rule</strong> is “written as → spoken as”. Teach Speech Hub how to say a name or a term once, and the fix applies to every app, Source, and the <code>speak</code> command. What you see in the Reader never changes; only what the engine hears.</Lead></div>
         <div className="flex gap-2 shrink-0">
           <Button variant="ghost" onClick={doImport}>Import…</Button>
           <Button variant="ghost" onClick={doExport} disabled={rules.length === 0}>Export…</Button>

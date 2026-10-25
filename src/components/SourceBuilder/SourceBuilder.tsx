@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { open as pickFile, save as pickSave } from "@tauri-apps/plugin-dialog";
 import { hub, errorMessage, useHubStatus, useSources, useVoices } from "../../services/hub";
 import type { Source, SourceKind, SourceTemplate, TestResult } from "../../types";
-import { Badge, Button, Card, Field, H1, Lead, Select, Toggle } from "../ui";
+import { Badge, Button, Card, Field, H1, Kbd, Lead, Select, Toggle } from "../ui";
+import { useSettings } from "../../services/hub";
+import { formatShortcut } from "../../lib/shortcut";
 
 const KIND_LABEL: Record<SourceKind["type"], string> = { text: "Saved text", file: "File", command: "Command", shortcut: "Apple Shortcut", http: "URL" };
 
@@ -16,6 +18,8 @@ function blank(template: SourceTemplate): Source {
 
 export default function SourceBuilder({ initialNew }: { initialNew?: boolean }) {
   const { sources } = useSources();
+  const { settings } = useSettings();
+  const quickKeys = formatShortcut(settings?.hotkeys.quickSpeak ?? "Alt+Shift+Escape");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Source | null>(null);
   const [templates, setTemplates] = useState<SourceTemplate[]>([]);
@@ -56,7 +60,7 @@ export default function SourceBuilder({ initialNew }: { initialNew?: boolean }) 
     return (
       <div>
         <H1>New Source</H1>
-        <Lead>Pick where the text should come from. You can change every detail afterwards.</Lead>
+        <Lead>Pick where the text should come from. Each choice is a starting point; you can change every detail afterwards.</Lead>
         <div className="grid gap-3 sm:grid-cols-2">
           {templates.map((t) => (
             <Card key={t.id} onClick={() => startNew(t)}>
@@ -77,7 +81,7 @@ export default function SourceBuilder({ initialNew }: { initialNew?: boolean }) 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-4">
-        <div><H1>Sources</H1><Lead>Where Speech Hub gets text: files, commands, Shortcuts, URLs. Run them from Quick Speak (⌥⇧⎋), the menu bar, or <code>speak run</code>.</Lead></div>
+        <div><H1>Sources</H1><Lead>A <strong>Source</strong> is a saved place to get text from: your clipboard, a file, a command, an Apple Shortcut, or a web address. Run one from the Quick Speak panel <Kbd>{quickKeys}</Kbd>, the menu-bar icon, or <code>speak run</code>.</Lead></div>
         <div className="flex gap-2 shrink-0">
           <Button variant="ghost" onClick={doImport}>Import…</Button>
           <Button variant="ghost" onClick={doExport} disabled={sources.length === 0}>Export…</Button>
@@ -86,7 +90,7 @@ export default function SourceBuilder({ initialNew }: { initialNew?: boolean }) 
       </div>
       {msg && <p className="text-[13px] text-[var(--muted)] mb-2">{msg}</p>}
       {sources.length === 0 ? (
-        <Card><p className="text-[var(--muted)]">No Sources yet. Try <strong>New Source → Current clipboard</strong>: it takes about thirty seconds.</p></Card>
+        <Card><p className="text-[var(--muted)]">No Sources yet. Try <strong>New Source → Current clipboard</strong>: it takes about thirty seconds. Then copy any text, press <Kbd>{quickKeys}</Kbd>, and pick it.</p></Card>
       ) : (
         <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] divide-y divide-[var(--border)]">
           {sources.map((s) => (

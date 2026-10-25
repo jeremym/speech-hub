@@ -249,8 +249,8 @@ Done the same day: cancellable capture, fast-fail on empty selection, tiled Pref
 
 | Item | Notes |
 |---|---|
-| Selection inside TUI apps in Ghostty (e.g. Claude Code's input box) | Ghostty's `accessibilitySelectedText` reads the live selection, so plain terminal text works. TUI apps that enable mouse reporting swallow the drag; needs a real repro with the watcher probe. Workaround: ⌥-drag to select in Ghostty, or the clipboard fallback Source. |
+| Selection inside TUI apps in Ghostty (e.g. Claude Code) | Probed 2026-10-25: Ghostty does expose the selection (`AXSelectedText` read fine mid-session), but Claude Code's constant redraws clear Ghostty's selection within a few seconds, so by the time ⌥⎋ reads it the range is empty. Not fixable from our side. Supported path: Ghostty copies on select by default on macOS, so set Shortcuts → Speak Selection → fallback = “Current clipboard” and ⌥⎋ just works there. |
 | Pocket TTS speed | sherpa-onnx ignores `speed` for Pocket (measured, `docs/perf.md`). Would need WSOLA time-stretch in `engines/pocket.rs`. |
-| Universal (x86_64) build | Needs the rustup `x86_64-apple-darwin` target; Homebrew's rust ships only the host std. Decision: install rustup alongside, or stay arm64-only. |
+| Universal (x86_64) build | **Decided 2026-10-25: Apple Silicon only for v1.** No Intel Mac to verify on, and a universal bundle doubles the ONNX payload. Recipe kept in `docs/release.md` if it's ever requested. |
 | Shortcuts App Intents, `AVSpeechSynthesisProvider` | Both need a Swift target built with Xcode (App Intents extension; an Audio Unit speech-synthesis extension bundled as `.appex`). Pure-Rust Tauri can't produce them. Decision: add an Xcode subproject later, or keep the CLI/deep-link/Services route documented in `docs/shortcuts.md`. |
 | Kokoro ja/zh quality | Needs listening by a speaker; phonemizer uses espeak `ja`/`cmn`. |
