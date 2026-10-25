@@ -298,10 +298,20 @@ export function HotkeysPane({ wizard }: PaneProps) {
         <Field label="Pressing it while something is already playing" hint="Choose whether the shortcut interrupts, or acts as a Stop button.">
           <Select value={settings.repeatShortcut} onChange={(v) => save({ repeatShortcut: v })} options={[{ value: "replace", label: "Read the new selection" }, { value: "stop", label: "Stop speaking" }]} />
         </Field>
-        <Field label="If the text can't be read" hint={<>A few apps hide their selection from macOS (some terminals while a program is drawing, some Electron apps). Instead of giving up, run a Source. “Current clipboard” is the usual pick: terminals like Ghostty copy on select, and elsewhere you press ⌘C first.</>}>
-          <SourcePicker value={settings.fallbackSourceId} onChange={(v) => save({ fallbackSourceId: v })} none="Just tell me nothing was selected" />
+        <Field label="If the text can't be read" hint="Only when nothing is highlighted, or the app hides its selection from macOS (some terminals while a program is drawing, some Electron apps). A highlighted selection is always read first.">
+          <Select value={settings.fallbackAction} onChange={(v) => save({ fallbackAction: v, fallbackSourceId: v === "source" ? settings.fallbackSourceId : null })} options={[{ value: "notice", label: "Just tell me" }, { value: "quick_speak", label: "Open the Quick Speak panel" }, { value: "source", label: "Run a Source" }]} />
         </Field>
-        <Note className="py-3">Right now: press <Kbd>{formatShortcut(settings.hotkeys.speakSelection)}</Kbd> → speaks the highlighted text{fallbackSource ? <>, or runs <strong>{fallbackSource.icon} {fallbackSource.name}</strong> when nothing readable is selected</> : ""}.</Note>
+        {settings.fallbackAction === "source" && (
+          <Field label="Which Source" hint="“Current clipboard” is the usual pick: terminals like Ghostty copy on select, and elsewhere you press ⌘C first.">
+            <SourcePicker value={settings.fallbackSourceId} onChange={(v) => save({ fallbackSourceId: v, fallbackAction: v ? "source" : "notice" })} none="Choose a Source…" />
+          </Field>
+        )}
+        <Note className="py-3">
+          Right now: press <Kbd>{formatShortcut(settings.hotkeys.speakSelection)}</Kbd> → speaks the highlighted text.
+          {" "}When nothing readable is selected: {settings.fallbackAction === "notice" && "a short “Nothing is selected” notice."}
+          {settings.fallbackAction === "quick_speak" && "the Quick Speak panel opens."}
+          {settings.fallbackAction === "source" && (fallbackSource ? <>runs <strong>{fallbackSource.icon} {fallbackSource.name}</strong>.</> : <span className="text-[var(--danger)]">no Source chosen yet.</span>)}
+        </Note>
       </Section>
 
       <Section

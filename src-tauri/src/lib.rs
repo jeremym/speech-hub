@@ -100,6 +100,7 @@ pub fn run() {
             commands::hub_engines,
             commands::reader_take_pending,
             commands::palette_selection_preview,
+            commands::hub_open_selection,
             commands::ax_is_trusted,
             commands::ax_request,
             commands::open_system_settings,

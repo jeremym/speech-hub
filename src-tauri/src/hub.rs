@@ -667,12 +667,39 @@ impl Hub {
         Ok(String::new())
     }
 
-    /// Nothing usable was selected: run the configured fallback Source, else show why.
+    /// Nothing usable was selected: do what Shortcuts → Speak Selection → "If the text can't be
+    /// read" says. A missing permission is always reported, whatever the setting.
     fn selection_failed(&self, e: AxError) -> HubError {
-        if !crate::sources::run_fallback(&self.inner.app, &self.inner.settings) {
+        use crate::settings::FallbackAction;
+        let action = self.inner.settings.get().fallback_action;
+        let handled = match (action, &e) {
+            (_, AxError::NotTrusted) | (FallbackAction::Notice, _) => false,
+            (FallbackAction::QuickSpeak, _) => {
+                self.open_palette();
+                true
+            }
+            (FallbackAction::Source, _) => crate::sources::run_fallback(&self.inner.app, &self.inner.settings),
+        };
+        if !handled {
             self.notice(e.to_string());
         }
         e.into()
+    }
+
+    /// Palette row "Open selected text in the Reader": the snapshot taken when the palette opened.
+    pub fn open_selection(&self) {
+        self.inner.snapshot_claimed.store(true, Ordering::SeqCst);
+        let hub = self.clone();
+        std::thread::spawn(move || match hub.take_fresh_snapshot() {
+            Some(sel) => {
+                let title = match sel.app_name {
+                    Some(app) => format!("Selection from {app}"),
+                    None => "Selected text".to_string(),
+                };
+                hub.open(&sel.text, Some(title));
+            }
+            None => hub.notice(AxError::NoSelection.to_string()),
+        });
     }
 
     /// Mark that a Source is fetching text (shown in the mini player while a command runs).

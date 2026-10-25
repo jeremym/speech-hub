@@ -23,7 +23,9 @@ pub struct Settings {
     pub repeat_shortcut: RepeatBehavior,
     pub quick_speak_action: QuickSpeakAction,
     pub quick_speak_source_id: Option<String>,
-    /// Source to run when Accessibility can't read the selection (PLAN.md §1.4). None = just report.
+    /// What Speak Selection does when Accessibility can't read the selection (PLAN.md §1.4).
+    pub fallback_action: FallbackAction,
+    /// Source to run for `FallbackAction::Source`.
     pub fallback_source_id: Option<String>,
     /// Unload the model after this many idle minutes. 0 = never.
     pub idle_unload_minutes: u32,
@@ -58,6 +60,18 @@ pub enum QuickSpeakAction {
     Source,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FallbackAction {
+    /// Show "Nothing is selected" (or the real reason) in the mini player.
+    #[default]
+    Notice,
+    /// Open the Quick Speak panel so the user can pick a Source or type instead.
+    QuickSpeak,
+    /// Run `fallback_source_id` (e.g. "Current clipboard").
+    Source,
+}
+
 impl Default for Hotkeys {
     fn default() -> Self {
         Self { speak_selection: "Alt+Escape".into(), quick_speak: "Alt+Shift+Escape".into() }
@@ -77,6 +91,7 @@ impl Default for Settings {
             repeat_shortcut: RepeatBehavior::Replace,
             quick_speak_action: QuickSpeakAction::Palette,
             quick_speak_source_id: None,
+            fallback_action: FallbackAction::Notice,
             fallback_source_id: None,
             idle_unload_minutes: 0,
             prewarm_browsers: true,
@@ -137,6 +152,13 @@ fn sanitize(mut s: Settings) -> Settings {
     }
     if s.hotkeys.quick_speak.trim().is_empty() {
         s.hotkeys.quick_speak = Hotkeys::default().quick_speak;
+    }
+    // Settings written before `fallback_action` existed: a chosen Source meant "run it".
+    if s.fallback_action == FallbackAction::Notice && s.fallback_source_id.as_deref().is_some_and(|id| !id.is_empty()) {
+        s.fallback_action = FallbackAction::Source;
+    }
+    if s.fallback_action == FallbackAction::Source && s.fallback_source_id.as_deref().is_none_or(|id| id.is_empty()) {
+        s.fallback_action = FallbackAction::Notice;
     }
     s
 }

@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { hub, errorMessage } from "../../services/hub";
 import type { PublicSource } from "../../types";
 
-interface Item { id: string; icon: string; label: string; hint: string; run: () => Promise<unknown> | void; section: "actions" | "sources" | "typed" }
+interface Item { id: string; icon: string; label: string; hint: string; run: () => Promise<unknown> | void; section: "selection" | "actions" | "sources" | "typed" }
 
 const TYPE_LABEL: Record<PublicSource["type"], string> = { text: "snippet", file: "file", command: "command", shortcut: "Shortcut", http: "URL" };
 
@@ -39,14 +39,15 @@ export default function Palette() {
   const items: Item[] = useMemo(() => {
     const ql = typed.toLowerCase();
     const matches = (s: string) => !ql || s.toLowerCase().includes(ql);
+    const preview = selection ? `“${selection.preview.length > 40 ? selection.preview.slice(0, 40) + "…" : selection.preview}” · ${selection.chars.toLocaleString()} chars` : "";
+    const from = selection?.appName ? ` from ${selection.appName}` : "";
+    const selectionItems: Item[] = selection ? [
+      { id: "selection", icon: "🔊", label: `Speak the selected text${from}`, hint: preview, run: () => hub.speakSelection(), section: "selection" as const },
+      { id: "selection-open", icon: "📝", label: "Open the selected text in the Reader", hint: "listen with controls, fix a pronunciation", run: () => hub.openSelection(), section: "selection" as const },
+    ].filter((a) => matches(a.label)) : [];
     const actions: Item[] = [
-      {
-        id: "selection", icon: "🖱️",
-        label: selection ? `Speak selected text${selection.appName ? ` from ${selection.appName}` : ""}` : "Speak selected text",
-        hint: selection ? `“${selection.preview.length > 40 ? selection.preview.slice(0, 40) + "…" : selection.preview}” · ${selection.chars.toLocaleString()} chars` : "reads whatever was selected when this opened",
-        run: () => hub.speakSelection(), section: "actions" as const,
-      },
-      { id: "reader", icon: "📝", label: "Open Reader", hint: "type or paste anything", run: () => hub.openWindow("reader"), section: "actions" as const },
+      ...(selection ? [] : [{ id: "selection", icon: "🖱️", label: "Speak selected text", hint: "nothing was selected when this opened", run: () => hub.speakSelection(), section: "actions" as const }]),
+      { id: "reader", icon: "📝", label: "Open an empty Reader", hint: "type or paste anything", run: () => hub.openWindow("reader"), section: "actions" as const },
       { id: "new-source", icon: "＋", label: "New Source…", hint: "file, command, Shortcut, URL", run: () => hub.openWindow("settings", "sources-new"), section: "actions" as const },
     ].filter((a) => matches(a.label));
     const src: Item[] = sources.filter((s) => s.enabled && (matches(s.name) || matches(s.description))).map((s) => ({
@@ -59,7 +60,7 @@ export default function Palette() {
       { id: "open-typed", icon: "📝", label: "Open this text in the Reader", hint: "⇧↩", run: () => hub.open(typed, "Quick Speak"), section: "typed" as const },
     ] : [];
     // Sources first when searching (that's what people type), actions first when idle.
-    return typed ? [...src, ...typedItems, ...actions] : [...actions, ...src];
+    return typed ? [...src, ...typedItems, ...selectionItems, ...actions] : [...selectionItems, ...actions, ...src];
   }, [typed, sources, selection]);
 
   const run = async (item: Item) => {
@@ -108,6 +109,8 @@ export default function Palette() {
             lastSection = it.section;
             return (
               <li key={it.id}>
+                {header === "selection" && <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-[var(--muted)]">Selected text{selection?.appName ? ` in ${selection.appName}` : ""}</div>}
+                {header === "actions" && selection && <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-[var(--muted)]">Other</div>}
                 {header === "sources" && sources.length > 0 && <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-[var(--muted)]">Your Sources</div>}
                 <button onMouseEnter={() => setSel(idx)} onClick={() => run(it)}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${idx === sel ? "bg-[var(--accent)] text-white" : "hover:bg-[var(--panel-2)]"}`}>

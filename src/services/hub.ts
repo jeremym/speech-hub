@@ -15,6 +15,7 @@ export const hub = {
   resume: () => invoke<void>("hub_resume"),
   togglePause: () => invoke<void>("hub_toggle_pause"),
   speakSelection: () => invoke<string>("hub_speak_selection"),
+  openSelection: () => invoke<void>("hub_open_selection"),
   voices: () => invoke<VoiceInfo[]>("hub_voices"),
   previewVoice: (voiceId: string) => invoke<string>("hub_preview_voice", { voiceId }),
   engines: () => invoke<ProfileCard[]>("hub_engines"),

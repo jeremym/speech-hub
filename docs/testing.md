@@ -17,7 +17,8 @@ Tick every row on a real Mac before calling a build done. ⌥⎋ = Speak selecti
 | Terminal.app / iTerm2 | speech | |
 | Slack / Discord | speech | |
 | PDF in Preview | speech | |
-| Nothing selected | "Nothing is selected" within ~30 ms; no hang | |
+| Nothing selected | per Shortcuts → “If the text can't be read”: notice within ~30 ms / Quick Speak panel opens / fallback Source runs | |
+| ⌥⇧⎋ with text selected | panel shows “Selected text in <app>” with Speak and Open in Reader rows | |
 | App that hides selection | "doesn't expose its selected text"; fallback Source runs if set | |
 | Stop button during "Waking up…" | capture cancels, player resets | |
 | ⌥⎋ again while speaking | obeys "Pressing again while speaking" (replace / stop) | |

@@ -65,6 +65,7 @@ export interface Settings {
   repeatShortcut: "replace" | "stop";
   quickSpeakAction: "palette" | "reader" | "source";
   quickSpeakSourceId: string | null;
+  fallbackAction: "notice" | "quick_speak" | "source";
   fallbackSourceId: string | null;
   idleUnloadMinutes: number;
   prewarmBrowsers: boolean;

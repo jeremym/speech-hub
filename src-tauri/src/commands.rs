@@ -139,6 +139,11 @@ pub fn palette_selection_preview(app: AppHandle) -> Option<hub::SelectionPreview
 }
 
 #[tauri::command]
+pub fn hub_open_selection(app: AppHandle) {
+    hub::get(&app).open_selection()
+}
+
+#[tauri::command]
 pub fn reader_take_pending(app: AppHandle) -> Option<ReaderText> {
     hub::get(&app).take_pending_reader()
 }
