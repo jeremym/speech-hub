@@ -60,3 +60,16 @@ Exit codes: 0 ok · 1 request rejected · 2 Speech Hub unavailable · 3 engine n
 ## Keyboard Maestro, Raycast, Alfred, BetterTouchTool
 
 Any "run shell script" or "open URL" step works the same way as the Shortcuts examples above. Raycast script commands: `#!/bin/sh` + `~/.local/bin/speak "$1"`.
+
+## Apple's built-in speech vs. Speech Hub
+
+macOS ships its own speech features. None of them use Speech Hub, and Speech Hub never uses Apple's voices.
+
+| You see | Who it is | What to do |
+|---|---|---|
+| Right-click → **Speech → Start Speaking** | Apple. Built into every Cocoa/WebKit text view; cannot be removed. | Ignore it. Speech Hub's items are under right-click → **Services**. |
+| ⌥⎋ reads with an Apple voice (or two voices at once) | System Settings → Accessibility → Spoken Content → **Speak selection** is on, and its default key is also ⌥⎋. | Turn it off there, or change Speech Hub's shortcut. Preferences → Shortcuts shows the live state. |
+| Words read as the pointer hovers | Spoken Content → **Speak items under the pointer**. | Turn off if unwanted. |
+| Keystrokes echoed | Spoken Content → **Typing feedback**. | Turn off if unwanted. |
+
+Preferences → Shortcuts → "Apple's built-in speech" reads these three switches from the system defaults (read-only) and flags a conflict when Apple's Speak selection shares the ⌥⎋ key.

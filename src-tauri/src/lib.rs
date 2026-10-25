@@ -97,6 +97,7 @@ pub fn run() {
             commands::ax_is_trusted,
             commands::ax_request,
             commands::open_system_settings,
+            commands::system_speech,
             commands::hotkeys_apply,
             commands::open_window,
             commands::hide_window,

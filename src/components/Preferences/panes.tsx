@@ -5,7 +5,7 @@ import VoiceRecorder from "./VoiceRecorder";
 import SourceBuilder from "../SourceBuilder/SourceBuilder";
 import PronunciationStudio from "../PronunciationStudio/PronunciationStudio";
 import { eventToShortcut, formatShortcut } from "../../lib/shortcut";
-import type { CliStatus, HotkeyStatus, ProfileCard, Settings, SystemInfo } from "../../types";
+import type { CliStatus, HotkeyStatus, ProfileCard, Settings, SystemInfo, SystemSpeech } from "../../types";
 import { Badge, Button, Card, Dots, Field, H1, Lead, Select, Toggle } from "../ui";
 
 type PaneProps = { wizard?: boolean };
@@ -259,8 +259,15 @@ function ShortcutRecorder({ value, onChange }: { value: string; onChange: (v: st
 export function HotkeysPane({ wizard }: PaneProps) {
   const { settings, save } = useSettings();
   const [statuses, setStatuses] = useState<HotkeyStatus[]>([]);
+  const [apple, setApple] = useState<SystemSpeech | null>(null);
   const refresh = () => hub.hotkeysApply().then(setStatuses).catch(() => {});
+  const refreshApple = () => hub.systemSpeech().then(setApple).catch(() => {});
   useEffect(() => { refresh(); }, [settings?.hotkeys.speakSelection, settings?.hotkeys.quickSpeak]);
+  useEffect(() => {
+    refreshApple();
+    window.addEventListener("focus", refreshApple);
+    return () => window.removeEventListener("focus", refreshApple);
+  }, []);
   if (!settings) return null;
   const st = (id: string) => statuses.find((s) => s.id === id);
   const setHotkey = (k: keyof Settings["hotkeys"]) => (v: string) => save({ hotkeys: { ...settings.hotkeys, [k]: v } });
@@ -288,8 +295,16 @@ export function HotkeysPane({ wizard }: PaneProps) {
         )}
       </Card>
       <Card className="mt-4">
-        <div className="font-medium">Already using Option+Escape for Apple's Speak Selection?</div>
-        <p className="text-[13px] text-[var(--muted)] mt-1">macOS may grab it first. Turn off Apple's shortcut in System Settings → Accessibility → Spoken Content → Speak selection, or pick a different shortcut above.</p>
+        <div className="font-medium">Apple's built-in speech</div>
+        {apple && (
+          <ul className="text-[13px] mt-2 space-y-1">
+            <li>{apple.speakSelectionEnabled ? <Badge tone="warn">On</Badge> : <Badge tone="ok">Off</Badge>} <span className="ml-1">Speak selection (Apple's ⌥⎋){apple.speakSelectionEnabled && settings.hotkeys.speakSelection === "Alt+Escape" ? " — conflicts with Speech Hub's shortcut. Both will fire." : ""}</span></li>
+            <li>{apple.hoverSpeechEnabled ? <Badge tone="warn">On</Badge> : <Badge tone="ok">Off</Badge>} <span className="ml-1">Speak items under the pointer</span></li>
+            <li>{apple.typingFeedbackEnabled ? <Badge tone="warn">On</Badge> : <Badge tone="ok">Off</Badge>} <span className="ml-1">Typing feedback</span></li>
+          </ul>
+        )}
+        <p className="text-[13px] text-[var(--muted)] mt-2">For a single voice, turn these off in System Settings → Accessibility → Spoken Content. Speech Hub never uses Apple's voices.</p>
+        <p className="text-[13px] text-[var(--muted)] mt-1">Right-click → <b>Speech → Start Speaking</b> is Apple's, built into every text field, and can't be removed. Speech Hub's items are under right-click → <b>Services</b> (“Speak with Speech Hub”, “Open in Speech Hub Reader”).</p>
         <div className="mt-2"><Button onClick={() => hub.openSystemSettings("spoken_content")}>Open Spoken Content settings</Button></div>
       </Card>
       {wizard && <p className="text-[13px] text-[var(--muted)] mt-4">Defaults: ⌥⎋ speaks the selection, ⌥⇧⎋ opens Quick Speak.</p>}

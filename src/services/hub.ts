@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type {
   CliStatus, CustomVoice, DownloadProgress, HotkeyStatus, ProfileCard, PublicSource, ReaderText, Rule, RulePreview,
-  RunResult, Settings, Source, SourceTemplate, SpeakOptions, Status, SystemInfo, TestResult, VoiceInfo, WindowLabel,
+  RunResult, Settings, Source, SourceTemplate, SpeakOptions, Status, SystemInfo, SystemSpeech, TestResult, VoiceInfo, WindowLabel,
 } from "../types";
 
 export const hub = {
@@ -30,6 +30,7 @@ export const hub = {
   openSystemSettings: (pane: "accessibility" | "spoken_content" | "login_items") =>
     invoke<void>("open_system_settings", { pane }),
   hotkeysApply: () => invoke<HotkeyStatus[]>("hotkeys_apply"),
+  systemSpeech: () => invoke<SystemSpeech>("system_speech"),
 
   openWindow: (label: WindowLabel, pane?: string) => invoke<void>("open_window", { label, pane }),
   openWindowWithPrefill: (label: WindowLabel, pane: string, prefill: { text: string; context: string }) =>

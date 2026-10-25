@@ -86,6 +86,12 @@ export interface SystemInfo {
   dataDir: string;
 }
 
+export interface SystemSpeech {
+  speakSelectionEnabled: boolean;
+  hoverSpeechEnabled: boolean;
+  typingFeedbackEnabled: boolean;
+}
+
 export interface CliStatus {
   bundled: string | null;
   link: string;

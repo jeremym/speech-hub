@@ -162,6 +162,37 @@ pub fn open_system_settings(pane: String) -> R<()> {
     std::process::Command::new("/usr/bin/open").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string().into())
 }
 
+/// State of Apple's own speech features that compete with Speech Hub.
+/// Read from the user's defaults domains; nothing is written.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSpeech {
+    /// System Settings → Accessibility → Spoken Content → Speak selection (default hotkey ⌥⎋).
+    pub speak_selection_enabled: bool,
+    /// Spoken Content → Speak items under the pointer.
+    pub hover_speech_enabled: bool,
+    /// Spoken Content → Speak typing feedback.
+    pub typing_feedback_enabled: bool,
+}
+
+fn defaults_bool(domain: &str, key: &str) -> bool {
+    std::process::Command::new("/usr/bin/defaults")
+        .args(["read", domain, key])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "1")
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn system_speech() -> SystemSpeech {
+    SystemSpeech {
+        speak_selection_enabled: defaults_bool("com.apple.universalaccess", "speakSelectionEnabled"),
+        hover_speech_enabled: defaults_bool("com.apple.universalaccess", "speakHoverTextEnabled"),
+        typing_feedback_enabled: defaults_bool("com.apple.universalaccess", "typingFeedbackEnabled"),
+    }
+}
+
 // ---------- hotkeys ----------
 
 #[tauri::command]
