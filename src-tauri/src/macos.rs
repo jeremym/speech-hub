@@ -28,14 +28,6 @@ pub fn float_on_all_spaces(w: &WebviewWindow) {
     }
 }
 
-/// Regular windows (Reader, Preferences): when re-shown, come to the user's current Space
-/// instead of dragging the user back to the Space they were created on.
-pub fn move_to_active_space(w: &WebviewWindow) {
-    if let Some(win) = ns_window(w) {
-        win.setCollectionBehavior(NSWindowCollectionBehavior::MoveToActiveSpace | NSWindowCollectionBehavior::FullScreenAuxiliary);
-    }
-}
-
 /// Show without making the window key and without activating the app (mini player).
 pub fn order_front_without_focus(w: &WebviewWindow) {
     if let Some(win) = ns_window(w) {

@@ -45,7 +45,11 @@ fn ensure(app: &AppHandle, label: &str) -> tauri::Result<tauri::WebviewWindow> {
     let window = builder.visible(false).build()?;
     match label {
         PLAYER | PALETTE => crate::macos::float_on_all_spaces(&window),
-        _ => crate::macos::move_to_active_space(&window),
+        // Document windows keep AppKit's default collection behavior. Overriding it (even to add
+        // MoveToActiveSpace) drops the implicit FullScreenPrimary, which removes the green
+        // full-screen button; tiling managers (AeroSpace) then treat the window as a dialog and
+        // float it. Setting FullScreenPrimary explicitly deadlocks tao's window delegate.
+        _ => {}
     }
     if label == PLAYER {
         position_player(app, &window);
@@ -69,11 +73,20 @@ fn position_player(app: &AppHandle, window: &tauri::WebviewWindow) {
 
 /// Run on the main thread (window creation is main-thread-only on macOS). Callers may be on
 /// hotkey, IPC, or synthesis threads.
+///
+/// Always goes through the event loop, never inline: Tauri runs `run_on_main_thread` closures
+/// immediately when already on the main thread, and creating a window from inside a plugin
+/// callback (deep link `on_open_url`, global shortcut) then re-enters Tauri's plugin-store
+/// mutex and deadlocks the app. Hopping through a thread makes the closure arrive as an event
+/// loop message after the callback has returned.
 fn on_main(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
     let handle = app.clone();
-    if let Err(e) = app.run_on_main_thread(move || f(&handle)) {
-        log::error!("run_on_main_thread: {e}");
-    }
+    std::thread::spawn(move || {
+        let inner = handle.clone();
+        if let Err(e) = handle.run_on_main_thread(move || f(&inner)) {
+            log::error!("run_on_main_thread: {e}");
+        }
+    });
 }
 
 /// Windows that should behave like a normal app's windows: tiled by window managers, in the
