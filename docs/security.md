@@ -38,6 +38,14 @@ only from same-user callers or after an in-app confirmation.
 - **Microphone**: only when you click "Record a voice" in Preferences → Voices (custom Plus voices). Hardened-runtime entitlement `com.apple.security.device.audio-input`; the recording is encoded to WAV in the window and handed to the voice library, nothing is kept beyond the trimmed reference clip.
 - **Services menu**: macOS passes the selected text on a private Services pasteboard. Speech Hub reads that pasteboard only inside the service call; it never reads or writes the general clipboard.
 
+## Known limits
+
+- The single-instance handshake socket lives in `/tmp` (plugin default); another local user could
+  make the running app show its Preferences window. Nothing else is reachable that way.
+- `speechhub://source/<name>` logs the Source *name* (never its output).
+- A Source's stderr is shown to the user in the error message but not written to the log.
+- Window-showing deep links are limited to one per 2 s and `speak` links to one per second.
+
 ## Reporting
 
 Open an issue tagged `security`. The maintainer will respond on a best-effort basis.

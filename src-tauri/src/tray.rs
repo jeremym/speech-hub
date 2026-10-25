@@ -2,7 +2,7 @@
 
 use crate::{hub, windows};
 use tauri::{
-    AppHandle, Manager,
+    AppHandle,
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
@@ -54,6 +54,5 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .build(app)?;
-    let _ = app.get_webview_window("none");
     Ok(())
 }

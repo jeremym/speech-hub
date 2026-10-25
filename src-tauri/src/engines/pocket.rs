@@ -61,7 +61,7 @@ impl VoiceLibrary {
         let (samples, rate) = read_reference(source_wav)?;
         let secs = samples.len() as f32 / rate as f32;
         if secs < 2.0 {
-            return Err(format!("the recording is only {secs:.1}s; use at least 3 seconds of clear speech"));
+            return Err(format!("the recording is only {secs:.1}s; use at least 2 seconds of clear speech (5–15 is best)"));
         }
         fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
         let id = format!("custom-{}", uuid::Uuid::new_v4());
@@ -277,7 +277,7 @@ mod tests {
         assert!((mono.len() as f32 / 16000.0 - 5.0).abs() < 0.01, "re-encoded as mono, same length");
         let short = dir.join("short.wav");
         sine_wav(&short, 1.0);
-        assert!(lib.add(&short, "Short", true).unwrap_err().contains("at least 3 seconds"));
+        assert!(lib.add(&short, "Short", true).unwrap_err().contains("at least 2 seconds"));
         lib.remove(&v.id).unwrap();
         assert!(lib.list().is_empty());
         assert!(!dir.join(&v.file).exists());

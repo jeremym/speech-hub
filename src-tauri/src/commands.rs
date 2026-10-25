@@ -225,7 +225,7 @@ pub fn hide_window(app: AppHandle, label: String) {
 
 // ---------- system ----------
 
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
     pub arch: String,
@@ -252,7 +252,11 @@ pub fn recommended_profile() -> String {
 }
 
 #[tauri::command]
-pub fn system_info(app: AppHandle) -> SystemInfo {
+pub async fn system_info(app: AppHandle) -> SystemInfo {
+    tauri::async_runtime::spawn_blocking(move || system_info_blocking(app)).await.unwrap_or_default()
+}
+
+fn system_info_blocking(app: AppHandle) -> SystemInfo {
     let macos = std::process::Command::new("/usr/bin/sw_vers")
         .arg("-productVersion")
         .output()
@@ -272,7 +276,7 @@ pub fn system_info(app: AppHandle) -> SystemInfo {
 
 // ---------- command line tool ----------
 
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliStatus {
     /// Path of the `speak` binary shipped inside the app.
@@ -313,7 +317,12 @@ fn login_shell_path_contains(dir: &std::path::Path) -> bool {
 }
 
 #[tauri::command]
-pub fn cli_status(app: AppHandle) -> CliStatus {
+pub async fn cli_status(app: AppHandle) -> CliStatus {
+    // Probes the login shell's PATH (0.5–3 s with nvm/oh-my-zsh): off the main thread.
+    tauri::async_runtime::spawn_blocking(move || cli_status_blocking(app)).await.unwrap_or_default()
+}
+
+fn cli_status_blocking(app: AppHandle) -> CliStatus {
     let link = cli_link_path();
     let installed = std::fs::read_link(&link).map(|t| t.exists()).unwrap_or(false);
     let socket = app.path().app_data_dir().map(|d| d.join("run/hub.sock").display().to_string()).unwrap_or_default();
@@ -340,7 +349,7 @@ pub fn cli_install(app: AppHandle) -> R<CliStatus> {
         Err(_) => {}
     }
     std::os::unix::fs::symlink(&target, &link).map_err(|e| e.to_string())?;
-    Ok(cli_status(app))
+    Ok(cli_status_blocking(app))
 }
 
 #[tauri::command]
@@ -351,7 +360,7 @@ pub fn cli_uninstall(app: AppHandle) -> R<CliStatus> {
             std::fs::remove_file(&link).map_err(|e| e.to_string())?;
         }
     }
-    Ok(cli_status(app))
+    Ok(cli_status_blocking(app))
 }
 
 // ---------- sources ----------
@@ -411,14 +420,14 @@ pub fn sources_duplicate(app: AppHandle, store: State<SourceStore>, id: String) 
     Ok(s)
 }
 
+/// Async so it runs off the main thread: commands and HTTP can take seconds, and the hub's
+/// window calls must never find the event loop blocked waiting on us.
 #[tauri::command]
-pub fn sources_run(app: AppHandle, reference: String) -> R<RunResult> {
-    // Off the main thread: commands and HTTP can take seconds.
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(sources::run_by_ref(&app, &reference));
-    });
-    Ok(rx.recv().map_err(|e| e.to_string())??)
+pub async fn sources_run(app: AppHandle, reference: String) -> R<RunResult> {
+    tauri::async_runtime::spawn_blocking(move || sources::run_by_ref(&app, &reference))
+        .await
+        .map_err(|e| CommandError::from(e.to_string()))?
+        .map_err(Into::into)
 }
 
 #[derive(Serialize)]
@@ -432,15 +441,15 @@ pub struct TestResult {
 
 /// Fetch a draft Source's text without speaking. The Builder's "Test" button.
 #[tauri::command]
-pub fn sources_test(source: Source) -> R<TestResult> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+pub async fn sources_test(source: Source) -> R<TestResult> {
+    let (text, fetch_ms) = tauri::async_runtime::spawn_blocking(move || {
         // A draft being tested in the Builder is by definition user-authored.
         let mut s = source;
         s.trusted = true;
-        let _ = tx.send(sources::fetch(&s));
-    });
-    let (text, fetch_ms) = rx.recv().map_err(|e| e.to_string())??;
+        sources::fetch(&s)
+    })
+    .await
+    .map_err(|e| CommandError::from(e.to_string()))??;
     let chars = text.chars().count();
     let preview: String = text.chars().take(2000).collect();
     Ok(TestResult { truncated: chars > 2000, preview, chars, fetch_ms })
@@ -473,8 +482,10 @@ pub fn sources_import(app: AppHandle, store: State<SourceStore>, path: String) -
 
 /// Names of the user's Shortcuts, for the picker.
 #[tauri::command]
-pub fn shortcuts_list() -> Vec<String> {
-    let out = std::process::Command::new("/usr/bin/shortcuts").arg("list").output();
+pub async fn shortcuts_list() -> Vec<String> {
+    // `shortcuts list` takes about a second; never on the main thread.
+    let out = tauri::async_runtime::spawn_blocking(|| std::process::Command::new("/usr/bin/shortcuts").arg("list").output()).await;
+    let Ok(out) = out else { return Vec::new() };
     out.ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
@@ -544,6 +555,10 @@ pub fn rules_export(store: State<RuleStore>, path: String) -> R<()> {
 
 #[tauri::command]
 pub fn rules_import(app: AppHandle, store: State<RuleStore>, path: String) -> R<usize> {
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() > 2 * 1024 * 1024 {
+        return Err("import file is larger than 2 MB".to_string().into());
+    }
     let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     if json.len() > 2 * 1024 * 1024 {
         return Err("import file is larger than 2 MB".to_string().into());

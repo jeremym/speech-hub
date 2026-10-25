@@ -172,6 +172,7 @@ fn fetch_http(url: &str, json_path: Option<&str>, timeout: Duration) -> Result<S
         "--max-time".into(), timeout.as_secs().to_string(),
         "--max-filesize".into(), MAX_OUTPUT_BYTES.to_string(),
         "--proto".into(), "=http,https".into(),
+        "--proto-redir".into(), "=http,https".into(),
         "-A".into(), "SpeechHub/0.1 (+https://github.com/jeremym/speech-hub)".into(),
         "-H".into(), "Accept: text/plain, application/json;q=0.9, text/*;q=0.8, */*;q=0.1".into(),
         "-w".into(), "\n\u{1}%{content_type}".into(),
@@ -238,7 +239,9 @@ fn json_strings(body: &str) -> String {
 /// decode the common entities. Not a browser; fine for articles and status pages.
 pub fn strip_html(html: &str) -> String {
     let mut out = String::with_capacity(html.len() / 2);
-    let lower = html.to_lowercase();
+    // ASCII-only lowercasing keeps byte offsets identical to `html`; Unicode lowercasing can
+    // change lengths (İ, Kelvin sign) and the indexing below would land inside a character.
+    let lower = html.to_ascii_lowercase();
     let mut i = 0;
     let bytes = html.as_bytes();
     while i < bytes.len() {
@@ -286,6 +289,16 @@ pub fn strip_html(html: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn strip_html_survives_multibyte_case_changes() {
+        // `İ` lowercases to 3 bytes, Kelvin sign to 1: offsets must not drift.
+        let out = super::strip_html("<p>İstanbul K <b>bold</b></p><script>x</script>tail");
+        assert!(out.contains("İstanbul"));
+        assert!(out.contains("bold"));
+        assert!(out.contains("tail"));
+        assert!(!out.contains("x</script>"));
+    }
+
     use super::*;
 
     #[test]

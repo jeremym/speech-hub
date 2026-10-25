@@ -29,9 +29,13 @@ define_class!(
         fn speak_text(&self, pboard: &NSPasteboard, _user_data: Option<&NSString>, _error: *mut *mut NSString) {
             if let Some(text) = read_text(pboard) {
                 let options = SpeakOptions { title: Some("Services".to_string()), ..Default::default() };
-                if let Err(e) = hub::get(&self.ivars().app).speak(&text, options) {
-                    log::warn!("services speak: {e}");
-                }
+                // Service calls arrive on the main thread; `speak` may wait for the engine.
+                let hub = hub::get(&self.ivars().app).clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = hub.speak(&text, options) {
+                        log::warn!("services speak: {e}");
+                    }
+                });
             }
         }
 

@@ -11,7 +11,7 @@ export function eventToShortcut(e: { code: string; ctrlKey: boolean; altKey: boo
   if (e.altKey) mods.push("Alt");
   if (e.shiftKey) mods.push("Shift");
   if (e.metaKey) mods.push("Super");
-  if (mods.length === 0 && !/^(F\d+|Escape)$/.test(key)) return null; // bare letters would hijack typing everywhere
+  if (mods.length === 0 && !/^F\d+$/.test(key)) return null; // a bare key (even Escape) would be swallowed system-wide
   return [...mods, key].join("+");
 }
 

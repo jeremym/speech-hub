@@ -39,6 +39,8 @@ pub fn start(settings: SettingsStore) {
         loop {
             std::thread::sleep(POLL);
             if !settings.get().prewarm_browsers || !accessibility::is_trusted(false) {
+                // Nothing to do until the user turns it on or grants Accessibility; poll gently.
+                std::thread::sleep(Duration::from_secs(5));
                 continue;
             }
             let Some(pid) = accessibility::frontmost_pid() else { continue };

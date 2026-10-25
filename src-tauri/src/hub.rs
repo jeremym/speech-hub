@@ -88,6 +88,11 @@ struct Inner {
     selection_generation: AtomicU64,
     /// Cancels the selection capture in flight (stop button while "waking up" an app).
     capture_cancel: Mutex<Option<Arc<AtomicBool>>>,
+    /// Set by `speak_selection` the moment it decides to use the palette's snapshot, so closing
+    /// the palette right after does not throw that snapshot away.
+    snapshot_claimed: AtomicBool,
+    /// Serializes cold engine loads after an idle unload (two requests must not load twice).
+    load_lock: Mutex<()>,
 }
 
 #[derive(Clone)]
@@ -97,7 +102,7 @@ pub struct Hub {
 
 impl Hub {
     pub fn new(app: AppHandle, settings: SettingsStore, roots: ModelRoots, rules: RuleStore) -> Result<Self, String> {
-        let player = Player::new().map_err(|e| e.to_string())?;
+        let player = Player::new();
         let s = settings.get();
         let hub = Hub {
             inner: Arc::new(Inner {
@@ -120,6 +125,8 @@ impl Hub {
                 selection_pending: AtomicBool::new(false),
                 selection_generation: AtomicU64::new(0),
                 capture_cancel: Mutex::new(None),
+                snapshot_claimed: AtomicBool::new(false),
+                load_lock: Mutex::new(()),
             }),
         };
         hub.load_engine(&s.engine_profile);
@@ -165,14 +172,29 @@ impl Hub {
             .expect("spawn idle watcher");
     }
 
-    /// Engine, loading it first if it was unloaded. Blocks the caller for the load (~0.5 s).
+    /// Engine, loading it first if it was unloaded. Blocks the caller for the load (~0.5 s warm,
+    /// a few seconds on a small machine). Never call on the main thread.
+    ///
+    /// While a load started elsewhere (launch, profile switch) is in flight, waits for it instead
+    /// of failing: "launch the app and speak" from the CLI, a deep link or Services must work the
+    /// first time.
     fn engine_or_load(&self) -> Result<Arc<dyn Engine>, HubError> {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            if let Some(e) = self.inner.engine.lock().unwrap().clone() {
+                return Ok(e);
+            }
+            if self.status().state != HubState::LoadingModel {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(HubError::EngineNotReady);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let _serial = self.inner.load_lock.lock().unwrap();
         if let Some(e) = self.inner.engine.lock().unwrap().clone() {
             return Ok(e);
-        }
-        let st = self.status();
-        if st.state == HubState::LoadingModel {
-            return Err(HubError::EngineNotReady);
         }
         let profile = self.inner.settings.get().engine_profile;
         self.set_status(|st| st.state = HubState::LoadingModel);
@@ -294,7 +316,6 @@ impl Hub {
             return Err(HubError::Invalid("nothing to speak".into()));
         }
         *self.inner.last_activity.lock().unwrap() = Instant::now();
-        let engine = self.engine_or_load()?;
         self.cancel_current();
         self.inner.player.resume();
 
@@ -317,7 +338,9 @@ impl Hub {
             st.error = None;
             st.progress = Progress { synthesized: 0, total };
         });
-        if self.inner.settings.get().show_mini_player && !windows::is_visible(&self.inner.app, windows::READER) {
+        // `is_shown` reads a cache: a cross-thread window getter here would wait on the event
+        // loop, which deadlocks when the caller is a sync command blocking the main thread.
+        if self.inner.settings.get().show_mini_player && !windows::is_shown(windows::READER) {
             windows::show_player(&self.inner.app);
         }
 
@@ -325,7 +348,20 @@ impl Hub {
         let job_for_thread = job.clone();
         std::thread::Builder::new()
             .name("speechhub-synth".into())
-            .spawn(move || hub.run_job(job_for_thread, engine, chunks, voice, speed))
+            .spawn(move || {
+                // The engine may still be loading (launch, profile switch, idle reload); wait here,
+                // off the caller's thread, so the UI never freezes on it.
+                let engine = match hub.engine_or_load() {
+                    Ok(e) => e,
+                    Err(e) => {
+                        if !job_for_thread.cancel.load(Ordering::SeqCst) {
+                            hub.finish(&job_for_thread, Some(e.to_string()));
+                        }
+                        return;
+                    }
+                };
+                hub.run_job(job_for_thread, engine, chunks, voice, speed)
+            })
             .expect("spawn synth thread");
         Ok(job.id.clone())
     }
@@ -365,6 +401,11 @@ impl Hub {
         // Everything is queued; wait for the device to drain it.
         while !player.is_drained() {
             if job.cancel.load(Ordering::SeqCst) || player.generation() != generation {
+                return;
+            }
+            if player.is_stalled() {
+                player.clear();
+                self.finish(&job, Some("No audio output device. Connect speakers or headphones and try again.".into()));
                 return;
             }
             std::thread::sleep(Duration::from_millis(40));
@@ -511,6 +552,20 @@ impl Hub {
         self.inner.selection_pending.load(Ordering::SeqCst) || self.inner.selection_snapshot.lock().unwrap().is_some()
     }
 
+    /// The palette closed. Unless a speak request already claimed the snapshot, forget it and
+    /// abandon any capture still running: the next ⌥⎋ must read the live selection, not this one.
+    pub fn palette_closed(&self) {
+        if self.inner.snapshot_claimed.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        self.inner.selection_generation.fetch_add(1, Ordering::SeqCst);
+        self.inner.selection_pending.store(false, Ordering::SeqCst);
+        *self.inner.selection_snapshot.lock().unwrap() = None;
+        if let Some(c) = self.inner.capture_cancel.lock().unwrap().take() {
+            c.store(true, Ordering::SeqCst);
+        }
+    }
+
     /// Blocks while a palette capture is still in flight (never on the main thread).
     fn take_fresh_snapshot(&self) -> Option<accessibility::Selection> {
         let deadline = Instant::now() + accessibility::WARMUP_BUDGET + Duration::from_millis(500);
@@ -536,6 +591,7 @@ impl Hub {
             return Ok(String::new());
         }
         let target = if self.has_snapshot() {
+            self.inner.snapshot_claimed.store(true, Ordering::SeqCst);
             None
         } else {
             match accessibility::Target::frontmost() {
@@ -615,6 +671,7 @@ impl Hub {
     /// Show a transient message in the mini player without changing playback.
     pub fn notice(&self, message: String) {
         let busy = self.is_busy();
+        let previous = self.status().state;
         self.set_status(|st| {
             if !busy {
                 st.state = HubState::Error;
@@ -630,7 +687,8 @@ impl Hub {
             hub.set_status(|st| {
                 st.error = None;
                 if st.state == HubState::Error && st.request_id.is_none() {
-                    st.state = HubState::Ready;
+                    // Back to what it was: a model still loading must not read as Ready.
+                    st.state = if previous == HubState::Error { HubState::Ready } else { previous };
                 }
             });
             windows::schedule_hide_player(&hub.inner.app, Duration::from_millis(100));

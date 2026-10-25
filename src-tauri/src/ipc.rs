@@ -12,6 +12,15 @@ use std::{
 };
 use tauri::AppHandle;
 
+static SOCKET_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Remove the socket file so `speak status` reports "not running" instead of "connection refused".
+pub fn shutdown(_app: &AppHandle) {
+    if let Some(p) = SOCKET_PATH.get() {
+        let _ = fs::remove_file(p);
+    }
+}
+
 /// Start listening. Returns the socket path. Errors are fatal for the IPC feature only.
 pub fn start(app: AppHandle, data_dir: &Path) -> io::Result<PathBuf> {
     let run_dir = data_dir.join("run");
@@ -29,6 +38,7 @@ pub fn start(app: AppHandle, data_dir: &Path) -> io::Result<PathBuf> {
     }
     let listener = UnixListener::bind(&sock)?;
     fs::set_permissions(&sock, fs::Permissions::from_mode(0o600))?;
+    let _ = SOCKET_PATH.set(sock.clone());
     log::info!("ipc listening on {}", sock.display());
     std::thread::Builder::new().name("speechhub-ipc".into()).spawn(move || {
         for conn in listener.incoming() {

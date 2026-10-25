@@ -29,11 +29,16 @@ cask "speech-hub" do
     run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Speech Hub.app"], must_succeed: false
   end
 
-  uninstall quit: "com.jeremym.speechhub"
+  uninstall quit:      "com.jeremym.speechhub",
+            launchctl: "com.jeremym.speechhub"
 
   zap trash: [
     "~/Library/Application Support/com.jeremym.speechhub",
     "~/Library/Preferences/com.jeremym.speechhub.plist",
+    "~/Library/LaunchAgents/com.jeremym.speechhub.plist",
+    "~/Library/WebKit/com.jeremym.speechhub",
+    "~/Library/Caches/com.jeremym.speechhub",
+    "~/Library/Logs/Speech Hub",
   ]
 
   caveats <<~EOS

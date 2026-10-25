@@ -34,7 +34,7 @@ Tick every row on a real Mac before calling a build done. ⌥⎋ = Speak selecti
 | Close Preferences (⌘W / red button) | hides; app stays in menu bar; Dock icon disappears | |
 | ⌘, from palette / Reader | Preferences opens | |
 | Esc in palette | closes | |
-| Multiple displays | windows open on the active display | |
+| Multiple displays | known gap: player uses the primary display, palette keeps its first position | |
 | Stage Manager on | windows still appear | |
 
 ## Input paths
@@ -49,7 +49,10 @@ Tick every row on a real Mac before calling a build done. ⌥⎋ = Speak selecti
 | `speak run "Say the date"` | speaks today's date | |
 | `open "speechhub://speak?text=hi"` | speaks | |
 | `open "speechhub://source/<id>"` | runs Source | |
-| Deep link while app not running | app launches and speaks | |
+| Deep link while app not running | app launches, waits for the engine, then speaks | |
+| `echo hi \| speak` while app not running | app launches, waits for the engine, then speaks | |
+| Palette: Esc, then ⌥⎋ in another app | reads the new selection, not the palette's old one | |
+| Run a Speak Source from the palette after the Reader was opened once | speaks; no hang | |
 | Palette: type Source name, Enter | runs | |
 | Palette with selection pending | reads the selection captured at open time | |
 
@@ -65,8 +68,10 @@ Tick every row on a real Mac before calling a build done. ⌥⎋ = Speak selecti
 | Pause / resume / stop from player | immediate | |
 | Long text (10k chars) in Reader | starts < 1 s, no gaps between chunks | |
 | Idle unload (set 1 min) | RSS drops after idle; next speech reloads | |
-| Headphones unplugged mid-speech | continues on speakers | |
-| Model download (fresh machine) | consent dialog first; progress; resumable | |
+| Headphones unplugged / AirPods connected mid-speech | output follows the new default device within ~1 s | |
+| No output device at all | job ends with "No audio output device"; app keeps running | |
+| ⌘Q in Preferences | windows close, speech service keeps running, player shows a notice | |
+| Model download (fresh machine) | consent dialog first; progress; restarts from zero if interrupted | |
 
 ## System & lifecycle
 

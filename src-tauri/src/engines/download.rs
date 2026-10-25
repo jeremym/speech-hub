@@ -83,7 +83,7 @@ fn install_inner(archive: &Archive, dest_root: &Path, report: &dyn Fn(&str, u64,
         let total = content_length(archive.url).unwrap_or(archive.approx_bytes);
         report("downloading", 0, total, None);
         let mut child = Command::new("/usr/bin/curl")
-            .args(["-fL", "--silent", "--show-error", "--retry", "3", "--proto", "=https", "-o"])
+            .args(["-fL", "--silent", "--show-error", "--retry", "3", "--proto", "=https", "--proto-redir", "=https", "-o"])
             .arg(&part)
             .arg(archive.url)
             .stdin(Stdio::null())

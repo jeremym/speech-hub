@@ -473,7 +473,8 @@ pub fn run_fallback(app: &AppHandle, settings: &SettingsStore) -> bool {
         Some(id) if !id.is_empty() => match run_by_ref(app, id) {
             Ok(_) => true,
             Err(e) => {
-                log::warn!("fallback source: {e}");
+                // `Failed` carries command stderr; log only the kind so no text reaches the log.
+                log::warn!("fallback source failed: {:?}", e.code());
                 false
             }
         },

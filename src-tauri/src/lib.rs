@@ -11,6 +11,7 @@ mod macos;
 mod playback;
 mod prewarm;
 mod pronunciation;
+mod menu;
 mod services;
 mod settings;
 mod sources;
@@ -53,6 +54,7 @@ pub fn run() {
                 .map_err(|e| std::io::Error::other(e))?;
             app.manage(hub);
 
+            menu::install(app)?;
             tray::build(app.handle())?;
             hotkeys::apply(app.handle(), &settings.get());
             if let Err(e) = ipc::start(app.handle().clone(), &data_dir) {
@@ -73,6 +75,10 @@ pub fn run() {
                 if windows::ALL.contains(&window.label()) {
                     api.prevent_close();
                     let _ = window.hide();
+                    windows::mark_shown(window.label(), false);
+                    if window.label() == windows::PALETTE {
+                        hub::get(window.app_handle()).palette_closed();
+                    }
                     windows::sync_activation_policy(window.app_handle());
                 }
             }
@@ -132,6 +138,21 @@ pub fn run() {
             commands::voices_custom_delete,
             commands::voices_custom_add_recording,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Speech Hub");
+        .build(tauri::generate_context!())
+        .expect("error while building Speech Hub")
+        .run(|app, event| match event {
+            // ⌘Q in Preferences or the Reader means "close this window", not "kill the speech
+            // service". Real Quit comes from the tray (`app.exit(0)`, which carries a code).
+            tauri::RunEvent::ExitRequested { api, code: None, .. } => {
+                api.prevent_exit();
+                for label in windows::DOCUMENT_WINDOWS {
+                    windows::hide(app, label);
+                }
+            }
+            tauri::RunEvent::Exit => {
+                hub::get(app).stop();
+                ipc::shutdown(app);
+            }
+            _ => {}
+        });
 }

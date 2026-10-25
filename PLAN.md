@@ -230,11 +230,11 @@ speech-hub/
 
 ---
 
-## 11. Open questions
+## 11. Open questions (resolved)
 
-1. `speak -o file.wav` in v1? Leaning yes, M3.
-2. Kokoro int8 vs fp16: decide by ear in M2.
-3. Idle-unload default (minutes): decide after measuring reload time in M2.
+1. `speak -o file.wav`: shipped in M3.
+2. Kokoro precision: fp32 (int8 measured 3× slower; see docs/perf.md).
+3. Idle-unload default: 0 (off); reload is ~0.5 s so unloading is opt-in.
 
 ## 12. Sources consulted (Oct 2026)
 - sherpa-onnx Rust: [sherpa-rs](https://github.com/Limit-LAB/sherpa-rs), [sherpa-onnx crate](https://docs.rs/sherpa-onnx), [pipecrab-tts-sherpa](https://docs.rs/pipecrab-tts-sherpa); pure-Rust alternatives [kokoroxide](https://docs.rs/kokoroxide), [Kokoros](https://www.sourcepulse.org/projects/2336393)

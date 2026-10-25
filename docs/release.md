@@ -11,7 +11,8 @@ Integrity = sha256 of the zip + the signing certificate's leaf hash. Same patter
 TCC keys the Accessibility grant to the designated requirement
 `identifier "com.jeremym.speechhub" and certificate leaf = H"…"`. A stable self-signed cert keeps
 that hash constant across releases, so users grant once. Ad-hoc signing pins to the cdhash and
-breaks the grant every build. Gatekeeper is handled by the cask stripping quarantine.
+breaks the grant every build. For cask installs Gatekeeper is handled by the cask stripping
+quarantine; zip users go through Privacy & Security → Open Anyway (see README).
 
 ## One-time
 1. `scripts/create-release-cert.sh` ⚠️ two login-password dialogs (keychain import, trust
@@ -39,6 +40,6 @@ codesign -d -r- "/Applications/Speech Hub.app"          # leaf hash matches the 
 ## Notes
 - Arm64 only for now: the Homebrew Rust toolchain has no `x86_64-apple-darwin` target. A universal
   build needs rustup (`rustup target add x86_64-apple-darwin`) and `pnpm tauri build --target universal-apple-darwin`.
-- Hardened runtime is on (Tauri default). No entitlements are needed: audio output, Accessibility
-  and the socket need none; microphone would (`com.apple.security.device.audio-input`) if recording lands.
+- Hardened runtime is on (Tauri default). The only entitlement is `com.apple.security.device.audio-input`
+  (`Entitlements.plist`) for "Record a voice"; audio output, Accessibility and the socket need none.
 - Tauri skips notarization unless `APPLE_ID`/`APPLE_API_KEY` env vars are set. Leave them unset.

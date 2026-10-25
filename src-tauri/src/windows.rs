@@ -1,7 +1,7 @@
 //! Window management. Every window is created on demand and hidden (not destroyed) on close,
 //! so reopening is instant and React state survives.
 
-use std::{sync::{Mutex, OnceLock}, time::Duration};
+use std::{collections::HashSet, sync::{Mutex, OnceLock}, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 pub const ONBOARDING: &str = "onboarding";
@@ -11,6 +11,30 @@ pub const PLAYER: &str = "player";
 pub const PALETTE: &str = "palette";
 
 pub const ALL: [&str; 5] = [ONBOARDING, SETTINGS, READER, PLAYER, PALETTE];
+
+/// Labels currently shown, maintained by `show`/`hide`/`show_player` and the close handler.
+/// Read this from worker threads instead of `WebviewWindow::is_visible()`: Tauri's window getters
+/// are dispatched to the event loop and wait for it, which deadlocks whenever the main thread is
+/// itself blocked on the worker (a sync command waiting on a channel).
+static SHOWN: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+fn shown() -> &'static Mutex<HashSet<String>> {
+    SHOWN.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn mark_shown(label: &str, visible: bool) {
+    let mut set = shown().lock().unwrap();
+    if visible {
+        set.insert(label.to_string());
+    } else {
+        set.remove(label);
+    }
+}
+
+/// Cheap, thread-safe visibility check (see `SHOWN`).
+pub fn is_shown(label: &str) -> bool {
+    shown().lock().unwrap().contains(label)
+}
 
 fn ensure(app: &AppHandle, label: &str) -> tauri::Result<tauri::WebviewWindow> {
     if let Some(w) = app.get_webview_window(label) {
@@ -91,7 +115,7 @@ fn on_main(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
 
 /// Windows that should behave like a normal app's windows: tiled by window managers, in the
 /// Cmd-Tab list, with a Dock icon while open. The menu-bar-only policy returns when they close.
-const DOCUMENT_WINDOWS: [&str; 3] = [SETTINGS, READER, ONBOARDING];
+pub const DOCUMENT_WINDOWS: [&str; 3] = [SETTINGS, READER, ONBOARDING];
 
 fn is_document(label: &str) -> bool {
     DOCUMENT_WINDOWS.contains(&label)
@@ -118,6 +142,7 @@ pub fn show(app: &AppHandle, label: &str) {
             let _ = w.show();
             let _ = w.unminimize();
             let _ = w.set_focus();
+            mark_shown(&label, true);
             let _ = app.emit("window:shown", label);
         }
         Err(e) => log::error!("cannot open window {label}: {e}"),
@@ -133,6 +158,7 @@ pub fn show_player(app: &AppHandle) {
                 position_player(app, &w);
             }
             crate::macos::order_front_without_focus(&w);
+            mark_shown(PLAYER, true);
         }
         Err(e) => log::error!("cannot open player: {e}"),
     });
@@ -144,9 +170,11 @@ pub fn hide(app: &AppHandle, label: &str) {
         if let Some(w) = app.get_webview_window(&label) {
             let _ = w.hide();
         }
+        mark_shown(&label, false);
         // The palette took keyboard focus; hand it back to the app the user was in.
         if label == PALETTE {
             crate::macos::deactivate_app();
+            crate::hub::get(app).palette_closed();
         }
         if is_document(&label) {
             sync_activation_policy(app);

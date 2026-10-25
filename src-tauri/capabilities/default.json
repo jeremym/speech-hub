@@ -12,7 +12,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-set-size",
     "core:window:allow-is-visible",
-    "opener:allow-open-url",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "dialog:allow-save"
   ]
 }

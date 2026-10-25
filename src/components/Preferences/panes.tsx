@@ -303,6 +303,11 @@ export function HotkeysPane({ wizard }: PaneProps) {
             <li>{apple.typingFeedbackEnabled ? <Badge tone="warn">On</Badge> : <Badge tone="ok">Off</Badge>} <span className="ml-1">Typing feedback</span></li>
           </ul>
         )}
+        {apple?.speakSelectionEnabled && settings.hotkeys.speakSelection === "Alt+Escape" && (
+          <div className="mt-2 flex gap-2">
+            <Button onClick={() => setHotkey("speakSelection")("Control+Alt+S")}>Use ⌃⌥S for Speech Hub instead</Button>
+          </div>
+        )}
         <p className="text-[13px] text-[var(--muted)] mt-2">For a single voice, turn these off in System Settings → Accessibility → Spoken Content. Speech Hub never uses Apple's voices.</p>
         <p className="text-[13px] text-[var(--muted)] mt-1">Right-click → <b>Speech → Start Speaking</b> is Apple's, built into every text field, and can't be removed. Speech Hub's items are under right-click → <b>Services</b> (“Speak with Speech Hub”, “Open in Speech Hub Reader”).</p>
         <div className="mt-2"><Button onClick={() => hub.openSystemSettings("spoken_content")}>Open Spoken Content settings</Button></div>

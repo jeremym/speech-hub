@@ -60,8 +60,14 @@ cargo run --release -p speech-hub --example bench -- standard   # measure
 ```bash
 brew install --cask jeremym/tap/speech-hub     # also puts `speak` on your PATH
 ```
-Or download `SpeechHub-x.y.z.zip` from Releases, unzip into /Applications, and on first launch use
-right-click → Open (the app is signed with the project's own certificate, not notarized).
+Or download `SpeechHub-x.y.z.zip` from Releases and unzip into /Applications. The app is signed with
+the project's own certificate, not notarized, so macOS blocks the first launch:
+
+1. Double-click Speech Hub once; dismiss the "cannot be opened" dialog.
+2. System Settings → Privacy & Security → scroll to Security → **Open Anyway** → confirm.
+
+Right-click → Open no longer bypasses Gatekeeper on macOS 15 and later. Terminal alternative:
+`xattr -dr com.apple.quarantine "/Applications/Speech Hub.app"`.
 
 ### Verifying a download
 ```bash

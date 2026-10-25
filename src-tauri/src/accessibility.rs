@@ -55,6 +55,7 @@ unsafe extern "C" {
         value: *mut CFTypeRef,
     ) -> AXError;
     fn AXUIElementSetAttributeValue(element: AXUIElementRef, attribute: CFStringRef, value: CFTypeRef) -> AXError;
+    fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, timeout_seconds: f32) -> AXError;
     fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
     static kAXTrustedCheckOptionPrompt: CFStringRef;
 }
@@ -237,6 +238,12 @@ pub fn frontmost_pid() -> Option<libc::pid_t> {
     Element::system_wide().child("AXFocusedApplication").ok().and_then(|a| a.pid()).or_else(frontmost_pid_appkit)
 }
 
+pub fn app_name(pid: libc::pid_t) -> Option<String> {
+    use objc2_app_kit::NSRunningApplication;
+    let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)?;
+    Some(app.localizedName()?.to_string())
+}
+
 pub fn bundle_id(pid: libc::pid_t) -> Option<String> {
     use objc2_app_kit::NSRunningApplication;
     let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)?;
@@ -274,8 +281,11 @@ impl Target {
     /// Target a specific process (tests, or a caller that already knows the app).
     pub fn for_pid(pid: libc::pid_t) -> Target {
         let app = Element::application(pid);
-        let app_name = app.string_attr("AXTitle").ok();
-        Target { app, app_name, bundle_id: bundle_id(pid) }
+        // The hotkey handler runs on the main thread: a hung target must cost at most a second,
+        // not the AX default of six.
+        unsafe { AXUIElementSetMessagingTimeout(app.0, 1.0) };
+        // The name comes from AppKit (no IPC with the target), not from AXTitle.
+        Target { app, app_name: app_name(pid), bundle_id: bundle_id(pid) }
     }
 
     /// Read the selection. Fast path first; if the app shows nothing, ask it to build its
@@ -304,8 +314,11 @@ impl Target {
             Err(_) => {}
         }
 
-        let was_enhanced = self.app.bool_attr("AXEnhancedUserInterface").unwrap_or(false);
-        let was_manual = self.app.bool_attr("AXManualAccessibility").unwrap_or(false);
+        // `None` means the app would not say (Chromium answers NotImplemented). Only a flag we
+        // read as `false` is restored to `false`: writing `false` blindly could switch off a flag
+        // VoiceOver or Voice Control set, and they would not know.
+        let was_enhanced = self.app.bool_attr("AXEnhancedUserInterface");
+        let was_manual = self.app.bool_attr("AXManualAccessibility");
         // Chromium and Gecko honor AXEnhancedUserInterface; Electron honors AXManualAccessibility.
         let e1 = self.app.set_bool_attr("AXEnhancedUserInterface", true);
         let e2 = self.app.set_bool_attr("AXManualAccessibility", true);
@@ -338,10 +351,10 @@ impl Target {
             }
         }
         if result.is_err() {
-            if !was_enhanced {
+            if was_enhanced == Some(false) {
                 self.app.set_bool_attr("AXEnhancedUserInterface", false);
             }
-            if !was_manual {
+            if was_manual == Some(false) {
                 self.app.set_bool_attr("AXManualAccessibility", false);
             }
         }
