@@ -54,6 +54,11 @@ An exhaustive list of the architectural, product, and platform decisions that ar
 - CSP is `default-src 'self'` with inline styles, data images, and the Tauri IPC origin only; `src-tauri/tauri.conf.json`.
 - Logging uses `env_logger` with `info` default, controllable via `RUST_LOG`; `src-tauri/src/lib.rs`.
 
+- Visibility of our own windows is tracked in a `HashSet` kept by `show`/`hide`/`show_player`/close; worker threads read `windows::is_shown` and never call Tauri window getters, which are dispatched to the event loop and deadlock when the main thread is blocked on that worker; `src-tauri/src/windows.rs`.
+- Commands that can take more than a few ms (`sources_run`, `sources_test`, `cli_status`, `shortcuts_list`, `system_info`) are `async` and run in `spawn_blocking`, so the main thread (tray, hotkeys, window ops) never waits on them; `src-tauri/src/commands.rs`.
+- ⌘Q in Preferences/Reader closes the windows and leaves the service running (custom app menu with "Close Windows (keep running)" and "Quit Speech Hub Entirely"); only the tray and that second item exit; `src-tauri/src/menu.rs`.
+- The IPC socket file is removed on `RunEvent::Exit`; `src-tauri/src/ipc.rs`, `src-tauri/src/lib.rs`.
+
 ## 3. User-facing settings (settings.rs and the Preferences panes)
 
 Stored as `settings.json` in the app data dir, written atomically via a `.tmp` rename, loaded with defaults for any missing field, sanitized on save; `src-tauri/src/settings.rs`.
@@ -179,6 +184,12 @@ Stored as `settings.json` in the app data dir, written atomically via a `.tmp` r
 - Kokoro voice ids encode language and gender in their prefix and are sorted English-first; the default voice is `af_heart`; `src-tauri/src/engines/kokoro.rs`.
 - Perf numbers are measured, never invented; a bench example and `docs/perf.md` hold them; `src-tauri/examples/bench.rs`, `docs/perf.md`, `CLAUDE.md`.
 
+- Speech requests wait up to 60 s for an engine that is loading (launch, profile switch, idle reload) instead of failing with "still loading"; the wait happens inside the speak worker, never on the caller's thread; `src-tauri/src/hub.rs` (`engine_or_load`, `speak`).
+- Audio output follows the system default device: the audio thread polls the default every 500 ms and rebuilds the cpal stream when the device changes or the stream errors, resampling any queued samples; a queue nobody consumes for 3 s ends the job with "No audio output device"; no device at launch is not fatal; `src-tauri/src/playback.rs`.
+- The palette's selection snapshot is dropped when the palette closes unless a speak request already claimed it, so the next ⌥⎋ reads the live selection; `src-tauri/src/hub.rs` (`palette_closed`), `src-tauri/src/windows.rs`.
+- AX flags (`AXEnhancedUserInterface`, `AXManualAccessibility`) are restored only when they were read as `false`; a flag the app would not report is left alone so VoiceOver's or Voice Control's setting is never cleared; `src-tauri/src/accessibility.rs`.
+- The AX messaging timeout for a target app is 1 s and the app name comes from `NSRunningApplication` (no IPC), so a hung target costs the hotkey handler at most a second; `src-tauri/src/accessibility.rs`.
+
 ## 7. Security and privacy
 
 - Hardened runtime is on; the only entitlement is microphone (`com.apple.security.device.audio-input`); audio output, Accessibility, and the socket need none; `src-tauri/tauri.conf.json`, `src-tauri/Entitlements.plist`.
@@ -203,6 +214,13 @@ Stored as `settings.json` in the app data dir, written atomically via a `.tmp` r
 - All stores (settings, sources, rules, voices index) write atomically via temp file + rename; `src-tauri/src/settings.rs`, `src-tauri/src/sources/mod.rs`, `src-tauri/src/pronunciation.rs`, `src-tauri/src/engines/pocket.rs`.
 - Logging policy: text is never logged; the hub logs ids, counts, timings, and error strings; `CLAUDE.md`, `docs/security.md`.
 - Security reporting is a GitHub issue tagged `security`, best-effort response; `docs/security.md`.
+
+- `strip_html` lowercases ASCII only, so byte offsets stay valid for pages containing `İ` or the Kelvin sign (Unicode lowercasing changed lengths and aborted the process); percent-decoding slices bytes, not `&str`; `src-tauri/src/sources/exec.rs`, `src-tauri/src/deeplink.rs`.
+- curl calls pin redirect protocols (`--proto-redir`) as well as the initial one; `src-tauri/src/sources/exec.rs`, `src-tauri/src/engines/download.rs`.
+- Deep links that show a window are limited to one per 2 s, speak links to one per second; `src-tauri/src/deeplink.rs`.
+- A bare key (including Escape) cannot be bound as a global shortcut; F-keys are the only modifier-less option; `src/lib/shortcut.ts`.
+- The webview capability grants `dialog:allow-open` and `dialog:allow-save` only (opener removed: no caller); `src-tauri/capabilities/default.json`.
+- Apple Spoken Content switches are read (never written) from `com.apple.universalaccess` and shown in the Shortcuts pane with a one-click rebind to ⌃⌥S when Apple's Speak selection also uses ⌥⎋; `src-tauri/src/commands.rs` (`system_speech`), `src/components/Preferences/panes.tsx`.
 
 ## 8. Packaging and distribution
 
@@ -258,4 +276,4 @@ Stored as `settings.json` in the app data dir, written atomically via a `.tmp` r
 - Pocket TTS license wording: the sherpa tarball README says "non-commercial" while the LICENSE file is plain CC-BY-4.0; the app shows CC-BY-4.0 plus the consent clause; `docs/model-licenses.md`, `src-tauri/resources/models/plus/README.md`.
 - `shortcuts run` output quirks were flagged as a risk to "verify early in M4"; the implementation uses `--output-path`/`--output-type` and falls back to stdout, but no verification note was recorded; `PLAN.md` §9, `src-tauri/src/sources/exec.rs`.
 - Where the espeak-ng data files are extracted at runtime (a temp dir on first use) and whether that survives hardened-runtime/sandbox changes; `docs/model-licenses.md`.
-- The "Apple's built-in speech" card reads `defaults` for `com.apple.universalaccess`; whether those keys are stable across macOS versions is unverified; `src-tauri/src/commands.rs`.
+- The "Apple's built-in speech" card reads `defaults` for `com.apple.universalaccess`; whether those keys are stable across macOS versions is unverified (verified on macOS 26 only); `src-tauri/src/commands.rs`.
