@@ -1,7 +1,15 @@
 //! macOS Accessibility: permission check and selected-text capture.
 //!
-//! Own minimal FFI instead of a binding crate: five functions, no version drift.
+//! Own minimal FFI instead of a binding crate: a handful of functions, no version drift.
 //! Never activates a window or touches the clipboard (PLAN.md §3, §9).
+//!
+//! What real apps expose (measured 2026-10-25 with a probe, see docs/architecture.md):
+//! - AppKit text views, Ghostty, browser URL bars: `AXSelectedText` / `AXSelectedTextRange`.
+//! - Firefox: the focused `AXWebArea` answers only `AXSelectedTextMarkerRange` +
+//!   `AXStringForTextMarkerRange` (the WebKit-style marker API).
+//! - Chromium (Brave 155): no web content in the tree at all until an assistive tool sets
+//!   `AXEnhancedUserInterface` on the app; the tree then takes ~3 s to appear. `AXManualAccessibility`
+//!   is ignored. Once enabled, both `AXSelectedText` and the marker API work.
 
 use core_foundation::{
     base::{CFGetTypeID, CFRelease, CFType, CFTypeRef, TCFType},
@@ -10,6 +18,7 @@ use core_foundation::{
     string::{CFString, CFStringRef},
 };
 use std::ffi::c_void;
+use std::time::{Duration, Instant};
 
 type AXUIElementRef = *const c_void;
 type AXError = i32;
@@ -21,9 +30,16 @@ const K_AX_ERROR_ATTRIBUTE_UNSUPPORTED: AXError = -25205;
 const K_AX_ERROR_NOT_IMPLEMENTED: AXError = -25208;
 const K_AX_ERROR_CANNOT_COMPLETE: AXError = -25204;
 
+/// How long to wait for a browser to build its accessibility tree after we ask for it.
+/// Brave 155 measured 3.3 s on a trivial page; heavy pages take longer.
+pub const WARMUP_BUDGET: Duration = Duration::from_millis(6000);
+const WARMUP_POLL: Duration = Duration::from_millis(100);
+
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
     fn AXUIElementCreateSystemWide() -> AXUIElementRef;
+    fn AXUIElementCreateApplication(pid: libc::pid_t) -> AXUIElementRef;
+    fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut libc::pid_t) -> AXError;
     fn AXUIElementCopyAttributeValue(
         element: AXUIElementRef,
         attribute: CFStringRef,
@@ -65,6 +81,10 @@ pub fn is_trusted(prompt: bool) -> bool {
 /// Owned wrapper around an AXUIElementRef that releases on drop.
 struct Element(AXUIElementRef);
 
+// AXUIElementRef is an immutable CF token (pid + remote element id); the AX calls are
+// synchronous Mach messages that are safe from any thread.
+unsafe impl Send for Element {}
+
 impl Drop for Element {
     fn drop(&mut self) {
         if !self.0.is_null() {
@@ -76,6 +96,16 @@ impl Drop for Element {
 impl Element {
     fn system_wide() -> Self {
         Element(unsafe { AXUIElementCreateSystemWide() })
+    }
+
+    fn application(pid: libc::pid_t) -> Self {
+        Element(unsafe { AXUIElementCreateApplication(pid) })
+    }
+
+    fn pid(&self) -> Option<libc::pid_t> {
+        let mut pid: libc::pid_t = 0;
+        let err = unsafe { AXUIElementGetPid(self.0, &mut pid) };
+        (err == K_AX_ERROR_SUCCESS && pid > 0).then_some(pid)
     }
 
     fn attr(&self, name: &str) -> Result<CFType, AxError> {
@@ -132,11 +162,12 @@ impl Element {
         }
     }
 
-    fn set_bool_attr(&self, name: &str, value: bool) -> bool {
+    /// Returns the raw AXError. Chromium answers `kAXErrorNotImplemented` for
+    /// `AXEnhancedUserInterface` and still honors it, so callers must not trust the code.
+    fn set_bool_attr(&self, name: &str, value: bool) -> AXError {
         let attr = CFString::new(name);
         let v = if value { CFBoolean::true_value() } else { CFBoolean::false_value() };
-        let err = unsafe { AXUIElementSetAttributeValue(self.0, attr.as_concrete_TypeRef(), v.as_CFTypeRef()) };
-        err == K_AX_ERROR_SUCCESS
+        unsafe { AXUIElementSetAttributeValue(self.0, attr.as_concrete_TypeRef(), v.as_CFTypeRef()) }
     }
 }
 
@@ -169,73 +200,109 @@ pub struct Selection {
     pub app_name: Option<String>,
 }
 
-/// Read the current selection from whatever element has focus, without activating anything.
-///
-/// Browsers (Chromium, Gecko) and Electron apps build their accessibility tree lazily: until an
-/// assistive tool announces itself, the web area reports no selection at all. Native text views
-/// answer immediately, so we try once, and only then flip `AXEnhancedUserInterface` on the
-/// frontmost app, wait for the tree, retry, and put the flag back the way we found it.
-pub fn selected_text() -> Result<Selection, AxError> {
-    if !is_trusted(false) {
-        return Err(AxError::NotTrusted);
-    }
-    let system = Element::system_wide();
-    let app = system.child("AXFocusedApplication").ok();
-    let app_name = app.as_ref().and_then(|a| a.string_attr("AXTitle").ok());
-
-    match capture_once(&system, app.as_ref()) {
-        Ok(text) => {
-            log::debug!("selection: direct");
-            return Ok(Selection { text, app_name });
-        }
-        Err(AxError::NoFocusedElement) if app.is_none() => return Err(AxError::NoFocusedElement),
-        Err(_) => {}
-    }
-
-    let Some(app) = app else { return Err(AxError::NoSelection) };
-    let was_enhanced = app.bool_attr("AXEnhancedUserInterface").unwrap_or(false);
-    let was_manual = app.bool_attr("AXManualAccessibility").unwrap_or(false);
-    // Gecko honors AXEnhancedUserInterface; Chromium honors both (AXManualAccessibility is its own
-    // switch that avoids the window-animation side effects of the enhanced flag).
-    app.set_bool_attr("AXManualAccessibility", true);
-    app.set_bool_attr("AXEnhancedUserInterface", true);
-    let mut result = Err(AxError::NoSelection);
-    for (i, delay_ms) in [40u64, 80, 150, 250].into_iter().enumerate() {
-        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-        match capture_once(&system, Some(&app)) {
-            Ok(text) => {
-                log::debug!("selection: after enabling browser accessibility (attempt {})", i + 1);
-                result = Ok(Selection { text, app_name: app_name.clone() });
-                break;
-            }
-            Err(e) => result = Err(e),
-        }
-    }
-    if !was_enhanced {
-        app.set_bool_attr("AXEnhancedUserInterface", false);
-    }
-    if !was_manual {
-        app.set_bool_attr("AXManualAccessibility", false);
-    }
-    result
+/// The app whose selection we want. Resolve it the instant the shortcut fires, before any of
+/// our own windows become key; the capture itself can then run later, on any thread, because
+/// an app's `AXFocusedUIElement` is per-app and doesn't care who is frontmost.
+pub struct Target {
+    app: Element,
+    pub app_name: Option<String>,
 }
 
-/// One capture attempt: focused element's selected text, then the range path, then the
-/// focused window's web area (Gecko sometimes focuses a container rather than the document).
-fn capture_once(system: &Element, app: Option<&Element>) -> Result<String, AxError> {
-    let focused = match app {
-        Some(a) => a.child("AXFocusedUIElement").or_else(|_| system.child("AXFocusedUIElement")),
-        None => system.child("AXFocusedUIElement"),
+impl Target {
+    pub fn frontmost() -> Result<Target, AxError> {
+        if !is_trusted(false) {
+            return Err(AxError::NotTrusted);
+        }
+        // Prefer the AX server's notion of focus; fall back to AppKit's frontmost app (the AX
+        // query needs a window-server connection, which a bare CLI process lacks).
+        let pid = Element::system_wide()
+            .child("AXFocusedApplication")
+            .ok()
+            .and_then(|a| a.pid())
+            .or_else(frontmost_pid_appkit)
+            .ok_or(AxError::NoFocusedElement)?;
+        Ok(Self::for_pid(pid))
     }
-    .map_err(|e| match e {
+
+    /// Target a specific process (tests, or a caller that already knows the app).
+    pub fn for_pid(pid: libc::pid_t) -> Target {
+        let app = Element::application(pid);
+        let app_name = app.string_attr("AXTitle").ok();
+        Target { app, app_name }
+    }
+
+    /// Read the selection. Fast path first; if the app shows nothing, ask it to build its
+    /// accessibility tree (browsers and Electron apps do this lazily) and poll until `budget`
+    /// runs out. `on_slow` fires once when the slow path starts, so the UI can say why it's waiting.
+    ///
+    /// If the slow path produced the selection, the flag stays on: that app demonstrably needs it,
+    /// and turning it back off would make every later capture pay the multi-second warm-up again.
+    /// If it produced nothing, the flag is restored so ordinary apps are left exactly as found.
+    pub fn capture(&self, budget: Duration, on_slow: impl FnOnce(Option<&str>)) -> Result<Selection, AxError> {
+        match capture_once(&self.app) {
+            Ok(text) => {
+                log::debug!("selection: direct");
+                return Ok(self.selection(text));
+            }
+            Err(AxError::NotTrusted) => return Err(AxError::NotTrusted),
+            Err(_) => {}
+        }
+
+        let was_enhanced = self.app.bool_attr("AXEnhancedUserInterface").unwrap_or(false);
+        let was_manual = self.app.bool_attr("AXManualAccessibility").unwrap_or(false);
+        // Chromium and Gecko honor AXEnhancedUserInterface; Electron honors AXManualAccessibility.
+        let e1 = self.app.set_bool_attr("AXEnhancedUserInterface", true);
+        let e2 = self.app.set_bool_attr("AXManualAccessibility", true);
+        log::debug!("selection: enabling accessibility tree (enhanced={e1}, manual={e2}), waiting up to {budget:?}");
+        on_slow(self.app_name.as_deref());
+
+        let started = Instant::now();
+        let mut result = Err(AxError::NoSelection);
+        while started.elapsed() < budget {
+            std::thread::sleep(WARMUP_POLL);
+            match capture_once(&self.app) {
+                Ok(text) => {
+                    log::debug!("selection: after warm-up ({} ms)", started.elapsed().as_millis());
+                    result = Ok(self.selection(text));
+                    break;
+                }
+                Err(e) => result = Err(e),
+            }
+        }
+        if result.is_err() {
+            if !was_enhanced {
+                self.app.set_bool_attr("AXEnhancedUserInterface", false);
+            }
+            if !was_manual {
+                self.app.set_bool_attr("AXManualAccessibility", false);
+            }
+        }
+        result
+    }
+
+    fn selection(&self, text: String) -> Selection {
+        Selection { text, app_name: self.app_name.clone() }
+    }
+}
+
+fn frontmost_pid_appkit() -> Option<libc::pid_t> {
+    use objc2_app_kit::NSWorkspace;
+    let ws = NSWorkspace::sharedWorkspace();
+    let app = ws.frontmostApplication()?;
+    Some(app.processIdentifier())
+}
+
+/// One capture attempt: the focused element's selection, then its ancestors up to the window.
+/// A focused link or button inside a selected paragraph won't carry the selection, but the web
+/// area above it does; Gecko sometimes focuses a container rather than the document.
+fn capture_once(app: &Element) -> Result<String, AxError> {
+    let focused = app.child("AXFocusedUIElement").map_err(|e| match e {
         AxError::NoSelection => AxError::NoFocusedElement,
         other => other,
     })?;
     if let Some(t) = selection_of(&focused) {
         return Ok(t);
     }
-    // Walk up a few levels: a focused link or button inside a selected paragraph won't carry the
-    // selection, but the web area above it does.
     let mut el = focused;
     for _ in 0..6 {
         let Ok(parent) = el.child("AXParent") else { break };
@@ -250,6 +317,8 @@ fn capture_once(system: &Element, app: Option<&Element>) -> Result<String, AxErr
     Err(AxError::NoSelection)
 }
 
+/// Three dialects: plain `AXSelectedText` (AppKit, Chromium once awake), range + string
+/// (AppKit, Ghostty), and text markers (Firefox, Safari/WebKit).
 fn selection_of(el: &Element) -> Option<String> {
     if let Ok(text) = el.string_attr("AXSelectedText") {
         if !text.trim().is_empty() {
@@ -258,6 +327,15 @@ fn selection_of(el: &Element) -> Option<String> {
     }
     if let Ok(range) = el.attr("AXSelectedTextRange") {
         if let Ok(v) = el.param_attr("AXStringForRange", &range) {
+            if let Some(text) = cf_to_string(&v) {
+                if !text.trim().is_empty() {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    if let Ok(range) = el.attr("AXSelectedTextMarkerRange") {
+        if let Ok(v) = el.param_attr("AXStringForTextMarkerRange", &range) {
             if let Some(text) = cf_to_string(&v) {
                 if !text.trim().is_empty() {
                     return Some(text);

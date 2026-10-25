@@ -34,7 +34,7 @@ only from same-user callers or after an in-app confirmation.
 
 ## Permissions the OS asks for
 
-- **Accessibility**: to read the selection in other apps. Requested in onboarding, never required
+- **Accessibility**: to read the selection in other apps. Requested in onboarding, never required Capture may set `AXEnhancedUserInterface` on a browser so it builds its accessibility tree (the same thing VoiceOver does); that flag is left on only for apps that needed it to answer, and it is never set on an app that answered directly.
   for the CLI or Sources.
 - **Microphone**: not requested (voices are added from WAV files; recording is a later feature).
 

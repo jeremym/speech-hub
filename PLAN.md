@@ -167,7 +167,7 @@ Each milestone ends with running code on a real Mac and a short demo note in `.c
 Progress legend: ✅ built + verified · 🟡 built, needs hands-on test · ⬜ not started
 
 **M1 — Native shell (Phase 1)** 🟡 (code complete; AX capture, hotkeys and window focus behavior await a human after signing)
-Tauri menu-bar app · AX selection capture (`AXUIElement` + `kAXSelectedTextAttribute`, with the AXFocusedUIElement → AXSelectedTextRange fallback) · Option+Escape · Accessibility-permission onboarding · stub engine that plays via macOS `say` *only as a dev placeholder, removed in M2*.
+Tauri menu-bar app · AX selection capture (`AXUIElement`: `AXSelectedText`, `AXSelectedTextRange`, and the WebKit/Gecko `AXSelectedTextMarkerRange` dialect, with on-demand `AXEnhancedUserInterface` warm-up for Chromium) · Option+Escape · Accessibility-permission onboarding · stub engine that plays via macOS `say` *only as a dev placeholder, removed in M2*.
 Done when: select text in TextEdit and Firefox, press the key, hear it.
 
 **M2 — Real offline speech (Phase 2)** ✅
@@ -201,7 +201,7 @@ Signing + notarization · DMG · GitHub Actions (build + Rust/Vitest tests; nati
 |---|---|---|
 | espeak-ng GPL via sherpa-onnx | License of distributed binary | Decide in §2; notice in docs; track phonemizer alternatives |
 | ~~sherpa-onnx dylib bundling~~ | — | Resolved: sherpa-onnx 2.0 and piper-phonemize link statically; the binary has no third-party dylibs. |
-| AX selection unavailable in some apps | Core UX failure | Clear error + fallback Source hook; document app matrix |
+| AX selection unavailable in some apps | Core UX failure | Three AX dialects + on-demand tree warm-up for Chromium/Gecko (flag left on once proven needed); clear error + fallback Source hook; app matrix in `docs/architecture.md` |
 | Option+Escape owned by macOS Speak Selection | Hotkey conflict | Detect at registration; onboarding tells user to disable Apple's |
 | Kokoro int8 quality regression vs fp32 | Voice quality | A/B in M2; ship fp16 if int8 is audibly worse and size allows |
 | Pocket TTS gating / terms | Can't ship cloning | Download-on-demand only; feature is optional by design |

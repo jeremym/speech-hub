@@ -1,6 +1,6 @@
 //! Speech Hub desktop app. See PLAN.md for the architecture.
 
-mod accessibility;
+pub mod accessibility;
 mod commands;
 mod deeplink;
 pub mod engines;

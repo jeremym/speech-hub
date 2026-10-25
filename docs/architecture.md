@@ -16,7 +16,7 @@ One Tauri 2 app, menu-bar only (`ActivationPolicy::Accessory`). Single instance 
 | `pronunciation.rs` | Substitution dictionary applied to synthesis input only. |
 | `playback.rs` | cpal output stream on a dedicated thread; mono f32 queue at device rate; pause = silence, stop = clear. |
 | `text.rs` | Normalization + sentence segmentation (chunk size bounded for low first-audio latency). |
-| `accessibility.rs` | Own FFI to `AXUIElement*`; selected text via `AXSelectedText`, fallback `AXSelectedTextRange` + `AXStringForRange`. |
+| `accessibility.rs` | Own FFI to `AXUIElement*`. `Target::frontmost()` is resolved the instant a shortcut fires; `Target::capture()` then runs on a worker thread and tries three dialects on the focused element and its ancestors: `AXSelectedText`, `AXSelectedTextRange` + `AXStringForRange`, `AXSelectedTextMarkerRange` + `AXStringForTextMarkerRange`. See *Selection capture* below. |
 | `hotkeys.rs` | Registers both shortcuts from settings; handler dispatches to hub. |
 | `windows.rs` | Labels: onboarding, settings, reader, player, palette. Mini player positions top-right, never focuses. |
 | `tray.rs` | Menu-bar icon (template PNG) and menu. |
@@ -37,3 +37,17 @@ One React bundle; `App.tsx` switches on the window label. `services/hub.ts` is t
 ## Crates
 - `crates/speechhub-protocol`: request/response types, validation, framing, socket path. Shared by app and CLI.
 - `crates/speechhub-cli`: the `speak` binary (~500 KB, no Tauri). Bundled as a sidecar; Preferences symlinks it into `~/.local/bin`.
+
+## Selection capture
+
+Measured 2026-10-25 against real apps (probe binaries in `src-tauri/examples/axcap.rs`):
+
+| App | What works | Notes |
+|---|---|---|
+| AppKit text views, browser URL bars | `AXSelectedText` | Instant. |
+| Firefox web content | `AXSelectedTextMarkerRange` + `AXStringForTextMarkerRange` on the focused `AXWebArea` | The plain attributes return "no value". |
+| Chromium (Brave 155) web content | Nothing until `AXEnhancedUserInterface` is set on the app, then `AXSelectedText` | Tree appears ~3.3 s after the flag is set on a trivial page. `AXManualAccessibility` is ignored. The set call returns `kAXErrorNotImplemented` and still takes effect. |
+| Ghostty | `AXTextArea` advertises `AXSelectedText`/`AXSelectedTextRange` but `AXStringForRange` returns empty strings | Under investigation; use a clipboard fallback Source meanwhile. |
+
+Policy: try the fast path; on failure set `AXEnhancedUserInterface` + `AXManualAccessibility` on the target app and poll for up to `WARMUP_BUDGET` (6 s). If that produced the selection the flags **stay on** (the app demonstrably needs them, and turning them off would make every later capture pay the warm-up again); if it produced nothing they are restored. Capture never blocks the main thread: the shortcut handler resolves the target app and returns, and the mini player shows "Waking up Brave's accessibility…" while the worker waits. The palette captures in the background too and refreshes its "Speak selected text" row via the `palette:selection` event.
+

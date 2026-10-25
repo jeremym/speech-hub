@@ -29,7 +29,9 @@ export default function Palette() {
     const un1 = listen<string>("window:shown", (e) => e.payload === "palette" && focus());
     const un2 = listen("sources:changed", reload);
     const un3 = listen<PublicSource>("palette:confirm-source", (e) => setConfirm(e.payload));
-    return () => { [un1, un2, un3].forEach((u) => u.then((f) => f())); };
+    // The selection is captured in the background (browsers can take seconds to expose it).
+    const un4 = listen("palette:selection", () => hub.paletteSelectionPreview().then(setSelection).catch(() => setSelection(null)));
+    return () => { [un1, un2, un3, un4].forEach((u) => u.then((f) => f())); };
   }, []);
 
   const close = () => { setConfirm(null); hub.hideWindow("palette"); };
@@ -41,7 +43,7 @@ export default function Palette() {
       {
         id: "selection", icon: "🖱️",
         label: selection ? `Speak selected text${selection.appName ? ` from ${selection.appName}` : ""}` : "Speak selected text",
-        hint: selection ? `“${selection.preview.length > 40 ? selection.preview.slice(0, 40) + "…" : selection.preview}” · ${selection.chars.toLocaleString()} chars` : "nothing was selected when this opened",
+        hint: selection ? `“${selection.preview.length > 40 ? selection.preview.slice(0, 40) + "…" : selection.preview}” · ${selection.chars.toLocaleString()} chars` : "reads whatever was selected when this opened",
         run: () => hub.speakSelection(), section: "actions" as const,
       },
       { id: "reader", icon: "📝", label: "Open Reader", hint: "type or paste anything", run: () => hub.openWindow("reader"), section: "actions" as const },

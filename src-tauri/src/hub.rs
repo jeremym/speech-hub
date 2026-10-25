@@ -2,14 +2,14 @@
 //! request → validate → normalize → (pronunciation, M5) → segment → engine → player.
 
 use crate::{
-    accessibility, engines::{self, Engine, EngineError, ModelRoots}, playback::Player, pronunciation::RuleStore,
+    accessibility::{self, AxError}, engines::{self, Engine, EngineError, ModelRoots}, playback::Player, pronunciation::RuleStore,
     settings::{RepeatBehavior, SettingsStore}, text, windows,
 };
 use speechhub_protocol::{EngineInfo, ErrorCode, HubState, Progress, SpeakOptions, Status, VoiceInfo};
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -83,6 +83,9 @@ struct Inner {
     last_activity: Mutex<Instant>,
     /// Selection captured the moment the palette opened (the palette itself then has focus).
     selection_snapshot: Mutex<Option<(accessibility::Selection, Instant)>>,
+    /// A background capture for the palette is still running.
+    selection_pending: AtomicBool,
+    selection_generation: AtomicU64,
 }
 
 #[derive(Clone)]
@@ -112,6 +115,8 @@ impl Hub {
                 pending_reader: Mutex::new(None),
                 last_activity: Mutex::new(Instant::now()),
                 selection_snapshot: Mutex::new(None),
+                selection_pending: AtomicBool::new(false),
+                selection_generation: AtomicU64::new(0),
             }),
         };
         hub.load_engine(&s.engine_profile);
@@ -453,12 +458,28 @@ impl Hub {
         self.inner.pending_reader.lock().unwrap().take()
     }
 
-    /// Open Quick Speak. Snapshot the selection first: once the palette is key, the focused
-    /// element is our own webview and Accessibility would report "nothing selected".
+    /// Open Quick Speak. Resolve the target app first: once the palette is key, the focused app
+    /// is us and Accessibility would report "nothing selected". The read itself runs in the
+    /// background because browsers can take seconds to expose their selection.
     pub fn open_palette(&self) {
-        let snap = accessibility::selected_text().ok().map(|s| (s, Instant::now()));
-        *self.inner.selection_snapshot.lock().unwrap() = snap;
+        *self.inner.selection_snapshot.lock().unwrap() = None;
+        let generation = self.inner.selection_generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let target = accessibility::Target::frontmost().ok();
         windows::show(&self.inner.app, windows::PALETTE);
+        let Some(target) = target else { return };
+        self.inner.selection_pending.store(true, Ordering::SeqCst);
+        let hub = self.clone();
+        std::thread::spawn(move || {
+            let snap = target.capture(accessibility::WARMUP_BUDGET, |_| {}).ok();
+            if hub.inner.selection_generation.load(Ordering::SeqCst) == generation {
+                let found = snap.is_some();
+                *hub.inner.selection_snapshot.lock().unwrap() = snap.map(|s| (s, Instant::now()));
+                hub.inner.selection_pending.store(false, Ordering::SeqCst);
+                if found {
+                    let _ = hub.inner.app.emit("palette:selection", ());
+                }
+            }
+        });
     }
 
     /// What the palette's "Speak selected text" row will read, if anything.
@@ -472,7 +493,16 @@ impl Hub {
         Some(SelectionPreview { preview: words, chars: sel.text.chars().count(), app_name: sel.app_name.clone() })
     }
 
+    fn has_snapshot(&self) -> bool {
+        self.inner.selection_pending.load(Ordering::SeqCst) || self.inner.selection_snapshot.lock().unwrap().is_some()
+    }
+
+    /// Blocks while a palette capture is still in flight (never on the main thread).
     fn take_fresh_snapshot(&self) -> Option<accessibility::Selection> {
+        let deadline = Instant::now() + accessibility::WARMUP_BUDGET + Duration::from_millis(500);
+        while self.inner.selection_pending.load(Ordering::SeqCst) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
         let mut guard = self.inner.selection_snapshot.lock().unwrap();
         match guard.take() {
             Some((sel, at)) if at.elapsed() <= Duration::from_secs(300) => Some(sel),
@@ -482,32 +512,66 @@ impl Hub {
 
     /// Option+Escape: capture the selection and speak it, honoring the repeat behavior.
     /// From the palette, the snapshot taken when it opened is used instead of a live capture.
+    ///
+    /// Returns as soon as the target app is known; the capture and the speech start in the
+    /// background so a slow browser never freezes the UI (the shortcut handler runs on the main thread).
     pub fn speak_selection(&self) -> Result<String, HubError> {
         let settings = self.inner.settings.get();
         if self.is_busy() && settings.repeat_shortcut == RepeatBehavior::Stop {
             self.stop();
             return Ok(String::new());
         }
-        let captured = match self.take_fresh_snapshot() {
-            Some(sel) => Ok(sel),
-            None => accessibility::selected_text(),
+        let target = if self.has_snapshot() {
+            None
+        } else {
+            match accessibility::Target::frontmost() {
+                Ok(t) => Some(t),
+                Err(e) => return Err(self.selection_failed(e)),
+            }
         };
-        match captured {
-            Ok(sel) => {
-                let title = Some(match sel.app_name {
-                    Some(app) => format!("Selection from {app}"),
-                    None => "Selected text".to_string(),
-                });
-                self.speak(&sel.text, SpeakOptions { title, ..Default::default() })
+        let hub = self.clone();
+        std::thread::spawn(move || {
+            let slowed = AtomicBool::new(false);
+            let captured = match hub.take_fresh_snapshot() {
+                Some(sel) => Ok(sel),
+                None => target
+                    .ok_or(AxError::NoFocusedElement)
+                    .or_else(|_| accessibility::Target::frontmost())
+                    .and_then(|t| {
+                        t.capture(accessibility::WARMUP_BUDGET, |name| {
+                            slowed.store(true, Ordering::SeqCst);
+                            let name = name.unwrap_or("this app");
+                            hub.set_loading_source(Some(&format!("Waking up {name}’s accessibility…")));
+                        })
+                    }),
+            };
+            if slowed.load(Ordering::SeqCst) {
+                hub.set_loading_source(None);
             }
-            Err(e) => {
-                if crate::sources::run_fallback(&self.inner.app, &self.inner.settings) {
-                    return Ok(String::new());
+            match captured {
+                Ok(sel) => {
+                    let title = Some(match sel.app_name {
+                        Some(app) => format!("Selection from {app}"),
+                        None => "Selected text".to_string(),
+                    });
+                    if let Err(e) = hub.speak(&sel.text, SpeakOptions { title, ..Default::default() }) {
+                        log::warn!("speak selection: {e}");
+                    }
                 }
-                self.notice(e.to_string());
-                Err(e.into())
+                Err(e) => {
+                    hub.selection_failed(e);
+                }
             }
+        });
+        Ok(String::new())
+    }
+
+    /// Nothing usable was selected: run the configured fallback Source, else show why.
+    fn selection_failed(&self, e: AxError) -> HubError {
+        if !crate::sources::run_fallback(&self.inner.app, &self.inner.settings) {
+            self.notice(e.to_string());
         }
+        e.into()
     }
 
     /// Mark that a Source is fetching text (shown in the mini player while a command runs).
