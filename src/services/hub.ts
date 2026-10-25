@@ -73,6 +73,8 @@ export const hub = {
   customVoices: {
     list: () => invoke<CustomVoice[]>("voices_custom_list"),
     add: (path: string, name: string, consent: boolean) => invoke<CustomVoice>("voices_custom_add", { path, name, consent }),
+    addRecording: (wav: Uint8Array, name: string, consent: boolean) =>
+      invoke<CustomVoice>("voices_custom_add_recording", wav, { headers: { "x-name": encodeURIComponent(name), "x-consent": consent ? "1" : "0" } }),
     delete: (id: string) => invoke<void>("voices_custom_delete", { id }),
   },
 };

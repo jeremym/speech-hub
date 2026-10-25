@@ -37,7 +37,8 @@
     "macOS": {
       "minimumSystemVersion": "13.0",
       "signingIdentity": "Speech Hub Release",
-      "hardenedRuntime": true
+      "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist"
     },
     "externalBin": [
       "binaries/speak"

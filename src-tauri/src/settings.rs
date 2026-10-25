@@ -27,6 +27,9 @@ pub struct Settings {
     pub fallback_source_id: Option<String>,
     /// Unload the model after this many idle minutes. 0 = never.
     pub idle_unload_minutes: u32,
+    /// Ask browsers to build their accessibility tree as soon as they come to the front, so the
+    /// first Option+Escape in them is instant (see prewarm.rs).
+    pub prewarm_browsers: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -76,6 +79,7 @@ impl Default for Settings {
             quick_speak_source_id: None,
             fallback_source_id: None,
             idle_unload_minutes: 0,
+            prewarm_browsers: true,
         }
     }
 }

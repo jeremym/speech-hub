@@ -9,7 +9,9 @@ mod hub;
 mod ipc;
 mod macos;
 mod playback;
+mod prewarm;
 mod pronunciation;
+mod services;
 mod settings;
 mod sources;
 pub mod text;
@@ -57,6 +59,8 @@ pub fn run() {
                 log::error!("ipc server failed to start: {e}");
             }
             deeplink::install(app.handle());
+            services::install(app.handle());
+            prewarm::start(settings.clone());
 
             if !settings.get().onboarding_complete {
                 windows::show(app.handle(), windows::ONBOARDING);
@@ -125,6 +129,7 @@ pub fn run() {
             commands::voices_custom_list,
             commands::voices_custom_add,
             commands::voices_custom_delete,
+            commands::voices_custom_add_recording,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Speech Hub");

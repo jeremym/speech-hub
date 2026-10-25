@@ -84,7 +84,7 @@ fn parse(argv: &[String]) -> Result<Args, String> {
             }
         }
     }
-    let mut need = |it: &mut std::iter::Peekable<std::slice::Iter<String>>, flag: &str| -> Result<String, String> {
+    let need = |it: &mut std::iter::Peekable<std::slice::Iter<String>>, flag: &str| -> Result<String, String> {
         it.next().cloned().ok_or_else(|| format!("{flag} needs a value"))
     };
     while let Some(arg) = it.next() {

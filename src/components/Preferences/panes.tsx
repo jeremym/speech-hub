@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { hub, useDownloadProgress, useHubStatus, useSettings, useSources, useVoices, errorMessage, STATE_LABEL } from "../../services/hub";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import VoiceRecorder from "./VoiceRecorder";
 import SourceBuilder from "../SourceBuilder/SourceBuilder";
 import PronunciationStudio from "../PronunciationStudio/PronunciationStudio";
 import { eventToShortcut, formatShortcut } from "../../lib/shortcut";
@@ -155,7 +156,8 @@ export function VoicesPane(_: PaneProps) {
   const status = useHubStatus();
   const voices = useVoices(status?.engine.id);
   const [filter, setFilter] = useState("");
-  const [adding, setAdding] = useState<{ path: string; name: string; consent: boolean } | null>(null);
+  const [adding, setAdding] = useState<{ path: string; wav?: Uint8Array; seconds?: number; name: string; consent: boolean } | null>(null);
+  const [recording, setRecording] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const current = settings?.voiceId || status?.voice_id || "";
   const shown = voices.filter((v) => `${v.name} ${v.language}`.toLowerCase().includes(filter.toLowerCase()));
@@ -166,19 +168,36 @@ export function VoicesPane(_: PaneProps) {
   };
   const addVoice = async () => {
     if (!adding) return;
-    try { await hub.customVoices.add(adding.path, adding.name, adding.consent); setAdding(null); setMsg("Voice added."); } catch (e) { setMsg(errorMessage(e)); }
+    try {
+      if (adding.wav) await hub.customVoices.addRecording(adding.wav, adding.name, adding.consent);
+      else await hub.customVoices.add(adding.path, adding.name, adding.consent);
+      setAdding(null); setMsg("Voice added.");
+    } catch (e) { setMsg(errorMessage(e)); }
   };
   const deleteVoice = (id: string) => hub.customVoices.delete(id).catch((e) => setMsg(errorMessage(e)));
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-start justify-between gap-4">
         <div><H1>Voices</H1><Lead>Pick a default voice. Every app, script, and Source uses it unless they ask for another.</Lead></div>
-        {isPlus && !adding && <Button variant="primary" onClick={pickRecording}>＋ Add voice from WAV…</Button>}
+        {isPlus && !adding && !recording && (
+          <div className="flex gap-2 shrink-0">
+            <Button variant="primary" onClick={() => setRecording(true)}>⏺ Record a voice…</Button>
+            <Button variant="ghost" onClick={pickRecording}>Add from WAV…</Button>
+          </div>
+        )}
       </div>
+      {isPlus && <p className="text-[13px] text-[var(--muted)] mb-2">Plus voices ignore the speed setting: Pocket TTS has no speed control.</p>}
+      {recording && (
+        <VoiceRecorder
+          onCancel={() => setRecording(false)}
+          onDone={(wav, seconds) => { setRecording(false); setAdding({ path: `Recording · ${seconds.toFixed(1)} s`, wav, seconds, name: "", consent: false }); }}
+        />
+      )}
       {adding && (
         <Card className="mb-3 border-[var(--accent)]/60">
-          <div className="font-medium">New voice from a recording</div>
+          <div className="font-medium">{adding.wav ? "New voice from your recording" : "New voice from a recording"}</div>
           <p className="text-[13px] text-[var(--muted)] mt-0.5 break-all">{adding.path}</p>
+          {adding.wav && adding.seconds !== undefined && adding.seconds < 2 && <p className="text-[13px] text-[var(--danger)] mt-1">That's under 2 seconds; record a little longer.</p>}
           <p className="text-[13px] text-[var(--muted)] mt-1">Best results: 5–15 seconds of one person speaking clearly, no music. Longer clips are trimmed to 30 s. The file stays on this Mac.</p>
           <input autoFocus value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} placeholder="Voice name" className="mt-2 w-full rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5" />
           <label className="mt-2 flex items-start gap-2 text-[13px]"><input type="checkbox" checked={adding.consent} onChange={(e) => setAdding({ ...adding, consent: e.target.checked })} className="mt-0.5 accent-[var(--accent)]" /><span>This is my own voice, or I have the speaker's explicit consent to clone it.</span></label>
@@ -293,6 +312,9 @@ export function GeneralPane(_: PaneProps) {
         </Field>
         <Field label="Show the mini player" hint="A small floating controller appears while speaking when the Reader isn't open.">
           <Toggle checked={settings.showMiniPlayer} onChange={(v) => save({ showMiniPlayer: v })} />
+        </Field>
+        <Field label="Prepare browsers for Speak Selection" hint="Chromium browsers (Brave, Chrome, Edge, Arc…) build their accessibility tree only when asked, which takes a few seconds. When on, Speech Hub asks the moment a browser comes to the front, so ⌥⎋ is instant. Same flag VoiceOver sets.">
+          <Toggle checked={settings.prewarmBrowsers} onChange={(v) => save({ prewarmBrowsers: v })} />
         </Field>
         <Field label="Unload the model when idle" hint="Frees ~500 MB on the Standard engine. The next request reloads it (about half a second). 0 = keep loaded.">
           <input type="number" min={0} max={240} value={settings.idleUnloadMinutes} onChange={(e) => save({ idleUnloadMinutes: Math.max(0, Number(e.target.value) || 0) })} className="w-20 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-right" />

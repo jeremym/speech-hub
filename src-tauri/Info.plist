@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Speech Hub records your voice only when you choose “Record a voice” in Preferences → Voices. Recordings stay on this Mac.</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Speak with Speech Hub</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>speakText</string>
+			<key>NSPortName</key>
+			<string>Speech Hub</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Open in Speech Hub Reader</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>openInReader</string>
+			<key>NSPortName</key>
+			<string>Speech Hub</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

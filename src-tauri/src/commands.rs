@@ -569,6 +569,31 @@ pub fn voices_custom_add(app: AppHandle, path: String, name: String, consent: bo
     Ok(v)
 }
 
+/// Add a voice from a recording made in the Preferences window. The WAV arrives as the raw
+/// request body; name and consent travel in headers (`x-name` is percent-encoded).
+#[tauri::command]
+pub fn voices_custom_add_recording(app: AppHandle, request: tauri::ipc::Request<'_>) -> R<CustomVoice> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the WAV as the raw request body".to_string().into());
+    };
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let name = header("x-name").map(|n| crate::deeplink::percent_decode(&n)).unwrap_or_default();
+    let consent = header("x-consent").as_deref() == Some("1");
+    if bytes.len() < 1024 {
+        return Err("The recording is empty.".to_string().into());
+    }
+    let hub = hub::get(&app);
+    let dir = hub.roots().voices_dir.clone();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!("recording-{}.wav", uuid::Uuid::new_v4()));
+    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+    let result = VoiceLibrary::new(dir).add(&tmp, &name, consent);
+    let _ = std::fs::remove_file(&tmp);
+    let v = result?;
+    hub.refresh_voices();
+    Ok(v)
+}
+
 #[tauri::command]
 pub fn voices_custom_delete(app: AppHandle, id: String) -> R<()> {
     let hub = hub::get(&app);

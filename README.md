@@ -50,6 +50,7 @@ cargo run --release -p speech-hub --example bench -- standard   # measure
 ## Docs
 
 - [docs/public-api.md](docs/public-api.md): the `speak` command, socket protocol, `speechhub://` links
+- [Shortcuts, Services menu, and automation](docs/shortcuts.md)
 - [docs/sources.md](docs/sources.md): building Sources
 - [docs/security.md](docs/security.md): trust boundaries
 - [docs/architecture.md](docs/architecture.md), [docs/perf.md](docs/perf.md), [docs/model-licenses.md](docs/model-licenses.md)

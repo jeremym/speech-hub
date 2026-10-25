@@ -245,15 +245,12 @@ speech-hub/
 
 ## 13. Backlog (from hands-on testing, 2026-10-25)
 
-Not scheduled; pick up after M7 ships.
+Done the same day: cancellable capture, fast-fail on empty selection, tiled Preferences/Reader (activation policy + default collection behavior), ⌘, everywhere, browser pre-warm, microphone recording for custom voices, Services menu, Shortcuts/automation guide (`docs/shortcuts.md`).
 
 | Item | Notes |
 |---|---|
-| Selection inside TUI apps in Ghostty (e.g. Claude Code's input box) | Ghostty's `AXTextArea` returns empty strings for ranges; TUI mouse reporting may also swallow the drag. Investigate with `examples/axcap.rs` + the watcher probe; likely needs an upstream Ghostty fix or the clipboard fallback Source. |
-| Verify tiling under AeroSpace | Document windows now switch the app to the Regular activation policy while open (Dock icon appears). Confirm AeroSpace tiles Preferences/Reader; if not, try `NSWindow` style/level tweaks. |
-| Pre-warm browser accessibility | Set `AXEnhancedUserInterface` when a known browser becomes frontmost so the first ⌥⎋ after launch is instant, instead of ~3 s. |
-| Microphone recording for custom Plus voices | Currently file import only. |
-| Universal (x86_64) build | Needs the rustup target. |
-| Services menu, Shortcuts actions, `AVSpeechSynthesisProvider` | Deeper system integration. |
-| Kokoro ja/zh quality, Pocket speed parameter | Engine follow-ups. |
-
+| Selection inside TUI apps in Ghostty (e.g. Claude Code's input box) | Ghostty's `accessibilitySelectedText` reads the live selection, so plain terminal text works. TUI apps that enable mouse reporting swallow the drag; needs a real repro with the watcher probe. Workaround: ⌥-drag to select in Ghostty, or the clipboard fallback Source. |
+| Pocket TTS speed | sherpa-onnx ignores `speed` for Pocket (measured, `docs/perf.md`). Would need WSOLA time-stretch in `engines/pocket.rs`. |
+| Universal (x86_64) build | Needs the rustup `x86_64-apple-darwin` target; Homebrew's rust ships only the host std. Decision: install rustup alongside, or stay arm64-only. |
+| Shortcuts App Intents, `AVSpeechSynthesisProvider` | Both need a Swift target built with Xcode (App Intents extension; an Audio Unit speech-synthesis extension bundled as `.appex`). Pure-Rust Tauri can't produce them. Decision: add an Xcode subproject later, or keep the CLI/deep-link/Services route documented in `docs/shortcuts.md`. |
+| Kokoro ja/zh quality | Needs listening by a speaker; phonemizer uses espeak `ja`/`cmn`. |

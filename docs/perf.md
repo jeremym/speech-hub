@@ -41,3 +41,8 @@ sherpa-onnx, so the first request with a new voice pays a little extra.
 - M1 8 GB: expected Standard RTF ≈ 0.3–0.4 with 4 threads. Needs a real run.
 - Idle memory after unload (settings → "Unload the model when idle").
 - Cold start of the `.app` to first tray icon.
+
+## Speed parameter
+
+Kokoro and Piper honor `speed` (sherpa-onnx scales phoneme durations). **Pocket TTS ignores it**: measured with `examples/speedtest.rs`, the same sentence rendered 4.6 s at 0.75×, 4.6 s at 1.0×, 4.1 s at 1.5× and 5.2 s at 2.0× (ordinary sampling variance, no trend). The Voices pane says so when Plus is active. A time-stretch post-process (WSOLA) is the only way to add it; backlog.
+

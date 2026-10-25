@@ -17,8 +17,10 @@ use core_foundation::{
     dictionary::{CFDictionary, CFDictionaryRef},
     string::{CFString, CFStringRef},
 };
+use std::collections::HashSet;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 type AXUIElementRef = *const c_void;
@@ -211,6 +213,46 @@ pub struct Selection {
 pub struct Target {
     app: Element,
     pub app_name: Option<String>,
+    pub bundle_id: Option<String>,
+}
+
+/// Apps that needed the slow path this session; prewarm.rs warms them up when they come forward.
+fn lazy_apps() -> &'static Mutex<HashSet<String>> {
+    static L: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    L.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn is_lazy_app(bundle_id: &str) -> bool {
+    lazy_apps().lock().map(|s| s.contains(bundle_id)).unwrap_or(false)
+}
+
+fn remember_lazy_app(bundle_id: &str) {
+    if let Ok(mut s) = lazy_apps().lock() {
+        s.insert(bundle_id.to_string());
+    }
+}
+
+/// Pid of the app the AX server considers focused (falls back to AppKit's frontmost app).
+pub fn frontmost_pid() -> Option<libc::pid_t> {
+    Element::system_wide().child("AXFocusedApplication").ok().and_then(|a| a.pid()).or_else(frontmost_pid_appkit)
+}
+
+pub fn bundle_id(pid: libc::pid_t) -> Option<String> {
+    use objc2_app_kit::NSRunningApplication;
+    let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)?;
+    let id = app.bundleIdentifier()?;
+    Some(id.to_string())
+}
+
+/// Ask an app to build its accessibility tree now. Returns true if the flag was newly set.
+pub fn enable_tree(pid: libc::pid_t) -> bool {
+    let app = Element::application(pid);
+    if app.bool_attr("AXEnhancedUserInterface") == Some(true) {
+        return false;
+    }
+    app.set_bool_attr("AXEnhancedUserInterface", true);
+    app.set_bool_attr("AXManualAccessibility", true);
+    true
 }
 
 impl Target {
@@ -233,7 +275,7 @@ impl Target {
     pub fn for_pid(pid: libc::pid_t) -> Target {
         let app = Element::application(pid);
         let app_name = app.string_attr("AXTitle").ok();
-        Target { app, app_name }
+        Target { app, app_name, bundle_id: bundle_id(pid) }
     }
 
     /// Read the selection. Fast path first; if the app shows nothing, ask it to build its
@@ -281,6 +323,9 @@ impl Target {
             match capture_once(&self.app) {
                 Ok(text) => {
                     log::debug!("selection: after warm-up ({} ms)", started.elapsed().as_millis());
+                    if let Some(id) = &self.bundle_id {
+                        remember_lazy_app(id);
+                    }
                     result = Ok(self.selection(text));
                     break;
                 }

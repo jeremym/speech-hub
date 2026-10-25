@@ -31,7 +31,8 @@ cpal = "0.18"
 hound = "3"
 core-foundation = "0.10"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSApplication", "NSResponder", "NSGraphics", "NSRunningApplication", "NSWorkspace"] }
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSApplication", "NSResponder", "NSGraphics", "NSRunningApplication", "NSWorkspace", "NSPasteboard"] }
+objc2-foundation = { version = "0.3", features = ["NSString"] }
 sherpa-onnx = "2"
 piper-phonemize = "1"
 libc = "0.2"

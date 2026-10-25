@@ -67,6 +67,7 @@ export interface Settings {
   quickSpeakSourceId: string | null;
   fallbackSourceId: string | null;
   idleUnloadMinutes: number;
+  prewarmBrowsers: boolean;
 }
 
 export interface HotkeyStatus {
