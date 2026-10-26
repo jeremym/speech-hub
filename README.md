@@ -1,142 +1,158 @@
 # Speech Hub
 
-**Give anything on your Mac a voice.**
+Local text-to-speech for macOS, delivered as a menu-bar app and a shared speech service.
 
-Speech Hub is a menu-bar utility for macOS that reads selected text aloud with a natural, fully
-local AI voice. It is also a shared **speech service**: any app, script, Apple Shortcut, or
-user-built "Source" can speak through it with one command, using the same voices and the same
-pronunciation dictionary.
+Speech Hub is a replacement for Apple's built-in Spoken Content feature (System Settings →
+Accessibility → Spoken Content, including the "Speak selection" shortcut) and for the `say`
+command. It reads selected text aloud with a neural voice that runs entirely on the Mac, and it
+exposes the same voices to every other tool on the system through a command-line interface, a
+local socket, URL links, and the Services menu. Speech Hub converts text to speech. It does not
+transcribe audio; Apple's Dictation remains the tool for that.
 
-> Status: milestones 1 to 7a are built and verified on a real Mac (engines, CLI, Sources,
-> pronunciation, voice cloning, self-signed release build). Remaining: first public release and
-> Homebrew cask. See [PLAN.md](PLAN.md) and [docs/testing.md](docs/testing.md).
+Apple Silicon (M1 or later), macOS 13 or newer. GPL-3.0-or-later.
 
 ## Contents
 
-- [What it does](#what-it-does)
-- [Vocabulary](#vocabulary)
+- [Overview](#overview)
+- [Features](#features)
+- [Terminology](#terminology)
 - [Keyboard shortcuts](#keyboard-shortcuts)
-- [Engines and voices](#engines-and-voices)
+- [Speech engines](#speech-engines)
 - [Sources](#sources)
-- [The `speak` command and other integrations](#the-speak-command-and-other-integrations)
+- [Command line and integrations](#command-line-and-integrations)
 - [Privacy and security](#privacy-and-security)
-- [Requirements and install](#requirements-and-install)
-- [Build from source](#build-from-source)
+- [Installation](#installation)
+- [Building from source](#building-from-source)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
+- [Project status](#project-status)
 - [License](#license)
 
-## What it does
+## Overview
 
-**Speak what you select.** Highlight text in almost any app, press ⌥⎋, and hear it. Pressing the
-key again while it is speaking stops it (configurable to restart instead). Selection capture uses
-the macOS Accessibility API and understands the WebKit, Gecko, and Chromium dialects, so it works
-in Safari, Firefox, Chrome, Brave, Mail, TextEdit, PDF viewers, and terminals. If nothing readable
-is selected you choose what happens: a notice, the Quick Speak panel, or a Source of your choice
-(for example "Current clipboard").
+Most text-to-speech utilities are readers: one window, one way in. Speech Hub is designed as a
+single voice layer for the whole machine.
 
-**Quick Speak panel.** Press ⌥⇧⎋ for a small command palette. Type text to speak it, run any of
-your Sources, speak or open the currently selected text, or open an empty Reader.
+- One set of voices, one speaking speed, and one pronunciation dictionary apply everywhere:
+  selected text, the Reader window, saved Sources, the `speak` command, Shortcuts, and links.
+- Any program that can run a command or open a URL can speak through it. No model embedding, no
+  runtime dependencies, no background server to manage.
+- Everything runs on the CPU, offline. No account, no telemetry, no network traffic unless the
+  user explicitly configures a URL Source or approves a model download.
 
-**Reader window.** A full window for longer text, with play, pause, stop, speed, a voice picker,
-chunk progress, and a "Fix pronunciation" button for any word you select in it.
+## Features
 
-**Mini player.** A small floating control that appears while speech plays, with pause and stop.
+**Speak Selection.** Select text in any application and press ⌥⎋. Pressing the shortcut again
+stops playback (or restarts it, by preference). Selection capture uses the macOS Accessibility
+API and supports the WebKit, Gecko, and Chromium accessibility dialects, so it works in Safari,
+Firefox, Chrome, Brave, Mail, TextEdit, PDF viewers, and terminals. When no readable selection
+exists, the configured fallback runs: a notice, the Quick Speak panel, or a Source such as
+"Current clipboard".
 
-**Sources.** User-built inputs that feed text into the Hub: a saved snippet, a file, the output of
-a command, the result of an Apple Shortcut, or a URL. Built in a GUI with templates, a Test
-button, import and export, and a trust gate for anything executable. See [Sources](#sources).
+**Quick Speak.** Press ⌥⇧⎋ for a command palette. Type text to speak it, run a Source, speak or
+open the current selection, or open an empty Reader.
 
-**Pronunciation Studio.** One dictionary of substitution rules (plain or regular expression, with
-ordering and live preview) that applies everywhere: selection, Reader, Sources, CLI, deep links.
+**Reader.** A window for longer text with play, pause, stop, speed, voice selection, progress, and
+a "Fix pronunciation" action for any selected word.
 
-**Voices.** Two bundled engines with 57 voices in 9 languages, a default voice and speaking speed,
-per-Source overrides, and voice previews. The optional Plus engine adds voice cloning from a 10
-second recording or WAV file.
+**Mini player.** A compact floating control with pause and stop, shown while speech is playing.
 
-**Automation.** The `speak` command-line tool, a Unix-socket protocol, `speechhub://` links, two
-items in the macOS Services menu, and recipes for Apple Shortcuts, Raycast, Alfred, Keyboard
-Maestro, cron, and Makefiles.
+**Sources.** User-defined inputs that supply text to the Hub: a saved snippet, a file, the output
+of a command, the result of an Apple Shortcut, or a URL. Sources are created in a graphical
+builder with templates, a test button, import and export, and an approval step for anything
+executable.
 
-**Menu bar app.** No Dock icon, optional launch at login, Preferences with an onboarding wizard
-that walks through the one Accessibility permission the app needs.
+**Pronunciation Studio.** A single dictionary of ordered substitution rules (literal or regular
+expression) with live preview, applied to all speech regardless of where the text came from.
 
-## Vocabulary
+**Voices.** Two bundled engines with 57 voices across 9 languages, a default voice and speed,
+per-Source overrides, and in-app previews. The optional Plus engine adds voice cloning from a
+ten-second recording or a WAV file.
+
+**Automation.** The `speak` command, a Unix-socket protocol, `speechhub://` links, two Services
+menu items, and documented recipes for Apple Shortcuts, Raycast, Alfred, Keyboard Maestro,
+BetterTouchTool, cron, and Makefiles.
+
+**Menu-bar application.** No Dock icon, optional launch at login, and a five-step onboarding
+wizard covering the single Accessibility permission the app requires.
+
+## Terminology
 
 | Term | Meaning |
 |---|---|
-| Speak Selection | The ⌥⎋ action: read the highlighted text in the front app. |
+| Speak Selection | The ⌥⎋ action: read the selected text in the frontmost application. |
 | Quick Speak | The ⌥⇧⎋ panel: type text, run a Source, or act on the selection. |
-| Source | A saved way to get text (file, command, Shortcut, URL, snippet). |
-| Reader | The window for listening to longer text with controls. |
-| Mini player | The floating pause/stop/speed control shown while speaking. |
-| Engine | The speech model that turns text into audio (Lite, Standard, Plus). |
+| Source | A saved way to obtain text: file, command, Shortcut, URL, or snippet. |
+| Reader | The window for listening to longer text with playback controls. |
+| Mini player | The floating pause/stop control shown during playback. |
+| Engine | A speech model that converts text to audio: Lite, Standard, or Plus. |
 | Voice | One speaker within an engine. |
-| Pronunciation rule | A substitution applied to text before it is spoken. |
+| Pronunciation rule | A substitution applied to text before synthesis. |
 
 ## Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
-| ⌥ ⎋ | Speak the selected text (press again to stop) |
+| ⌥ ⎋ | Speak the selected text; press again to stop |
 | ⌥ ⇧ ⎋ | Open the Quick Speak panel |
 
-Both are configurable in Preferences → Shortcuts. The pane also detects a clash with Apple's
-built-in "Speak selection" shortcut and offers to resolve it.
+Both shortcuts are configurable in Preferences → Shortcuts. The pane detects a conflict with
+Apple's "Speak selection" shortcut and offers to resolve it.
 
-## Engines and voices
+## Speech engines
 
-Everything runs on the CPU, offline, through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx).
-Nothing is sent anywhere.
+Synthesis runs on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). No
+network access is required.
 
 | Profile | Model | Size | First audio* | Notes |
 |---|---|---|---|---|
-| Lite | Piper (3 voices, int8) | 53 MB | 380 ms | bundled, lowest memory |
-| Standard | Kokoro-82M fp32 (54 voices, 9 languages) | 337 MB | 340 ms | bundled, default |
-| Plus | Pocket TTS (Kyutai) | 98 MB download | 261 ms | voice cloning; CC-BY-4.0 with a consent notice |
+| Lite | Piper, 3 voices, int8 | 53 MB | 380 ms | Bundled. Lowest memory. |
+| Standard | Kokoro-82M fp32, 54 voices, 9 languages | 337 MB | 340 ms | Bundled. Default. |
+| Plus | Pocket TTS (Kyutai) | 98 MB download | 261 ms | Voice cloning. CC-BY-4.0 with a consent notice. |
 
-\* Apple M3 Ultra, release build. Real measurements in [docs/perf.md](docs/perf.md).
+\* Measured on an Apple M3 Ultra, release build. Methodology and full results in
+[docs/perf.md](docs/perf.md).
 
-The Plus engine is never bundled. Preferences → Engines downloads it on request after showing
-its license, verifies the hash, and stores it under Application Support. Custom voices are created
-from a recording made in the app (microphone permission asked once) or from a WAV file you pick,
-and stay on your Mac.
+The Plus engine is never bundled. Preferences → Engines downloads it on request after presenting
+its license, verifies the archive hash, and stores it under Application Support. Custom voices are
+created from an in-app recording (microphone permission requested once) or from a WAV file, and
+remain on the local machine.
 
-Models unload after a period of idleness and reload on the next request. The first request after
-an unload takes about a second longer.
+Engines unload after a period of inactivity and reload on the next request, which adds roughly
+one second to that request.
 
 ## Sources
 
-A Source is a saved recipe for getting text. Each one has a name, an icon, its own optional voice
-and speed, and an action: speak at once or open in the Reader.
+A Source is a saved recipe for obtaining text. Each has a name, an icon, an optional voice and
+speed, and an action: speak immediately or open in the Reader.
 
-| Kind | What it does | Needs approval |
+| Kind | Behavior | Approval required |
 |---|---|---|
-| Saved text | Speaks a fixed snippet | no |
-| File | Reads a `.txt` or `.md` file you picked (1 MB cap) | no |
-| Command | Runs a program with an argument list; stdout is the text. No shell unless you turn it on | yes |
-| Apple Shortcut | Runs a Shortcut by name and reads its text result | yes |
-| URL | HTTP GET; plain text, JSON via a field path, or HTML reduced to text | no |
+| Saved text | Speaks a fixed snippet. | No |
+| File | Reads a `.txt` or `.md` file (1 MB limit). | No |
+| Command | Runs a program with an argument list; standard output becomes the text. No shell unless enabled. | Yes |
+| Apple Shortcut | Runs a Shortcut by name and reads its text result. | Yes |
+| URL | HTTP GET. Plain text as-is, JSON via a field path, HTML reduced to text. | No |
 
-Templates give a working Source in one click: Current clipboard, Speak a file, Run a command,
-Shortcut output, Fetch URL. Sources run with a 10 second timeout, a 1 MB output cap, a scrubbed
-environment, and are marked untrusted on import until you approve them after seeing the exact
-executable. Details in [docs/sources.md](docs/sources.md).
+Templates provide a working Source in one step: Current clipboard, Speak a file, Run a command,
+Shortcut output, Fetch URL. Every Source runs with a 10-second timeout, a 1 MB output limit, and
+a minimal environment. Imported Sources are untrusted until the user reviews the exact executable
+and approves them.
 
-Sources appear in the Quick Speak panel and can be run from the CLI (`speak run <name>`), from a
-`speechhub://source/<name>` link (with a confirmation sheet), or as the fallback when no text is
-selected.
+Sources are available from the Quick Speak panel, the command line (`speak run <name>`), a
+`speechhub://source/<name>` link (with confirmation), and as the Speak Selection fallback.
+Details: [docs/sources.md](docs/sources.md).
 
-## The `speak` command and other integrations
+## Command line and integrations
 
-Preferences → Command Line installs `speak` into `~/.local/bin` (no sudo). It is compatible with
-the common flags of Apple's `say`.
+Preferences → Command Line installs `speak` into `~/.local/bin` without administrator rights. The
+command accepts the common flags of Apple's `say`.
 
 ```bash
-echo "Build finished" | speak          # stdin
-speak "Hello, world"                   # positional
+echo "Build finished" | speak          # standard input
+speak "Hello, world"                   # positional text
 speak -f notes.md                      # a file
-speak -v af_heart -r 1.2 "Hi"          # voice and rate
+speak -v af_heart -r 1.2 "Hello"       # voice and rate
 pbpaste | speak --open                 # open in the Reader instead of speaking
 speak run morning-briefing             # run a saved Source
 speak palette                          # open Quick Speak
@@ -146,18 +162,19 @@ speak voices --json
 speak sources list
 ```
 
-Exit codes: 0 ok, 1 request error, 2 app unavailable, 3 permission or engine not ready, 64 usage.
-Requests are capped at 1 MB. The app is launched on demand if it is not running.
+Exit codes: 0 success, 1 request error, 2 application unavailable, 3 permission or engine not
+ready, 64 usage. Requests are limited to 1 MB. The application launches on demand.
 
-Other ways in:
+Additional interfaces:
 
-- **Unix socket** at `~/Library/Application Support/Speech Hub/run/hub.sock`, length-prefixed JSON,
-  same-user only. Verbs: speak, open, run_source, stop, pause, resume, status, list_voices,
-  list_sources, palette. There is no "run this command" verb; only pre-approved Sources run.
-- **`speechhub://` links**: `open`, `palette`, `preferences`, `stop`, `speak?text=` (2 KB cap,
-  rate limited), `source/<id-or-name>` (asks first).
+- **Unix socket** at `~/Library/Application Support/Speech Hub/run/hub.sock`. Length-prefixed
+  JSON, restricted to the current user. Verbs: `speak`, `open`, `run_source`, `stop`, `pause`,
+  `resume`, `status`, `list_voices`, `list_sources`, `palette`. There is no verb that executes
+  arbitrary commands; only pre-approved Sources can run.
+- **`speechhub://` links**: `open`, `palette`, `preferences`, `stop`, `speak?text=` (2 KB limit,
+  rate-limited), and `source/<id-or-name>` (requires confirmation).
 - **Services menu**: right-click selected text → Services → "Speak with Speech Hub" or "Open in
-  Speech Hub Reader". Works in Chromium browsers too.
+  Speech Hub Reader". Available in Chromium-based browsers as well as AppKit applications.
 - **Apple Shortcuts, Raycast, Alfred, Keyboard Maestro, BetterTouchTool, cron**: recipes in
   [docs/shortcuts.md](docs/shortcuts.md).
 
@@ -165,36 +182,42 @@ Full reference: [docs/public-api.md](docs/public-api.md).
 
 ## Privacy and security
 
-- No telemetry, accounts, or cloud. The only network traffic is a URL Source you created or a
-  model download you approved.
-- Submitted text is never written to logs. Logs carry request ids and sizes only.
-- Everything from outside is untrusted: deep links, imported Sources, socket requests, HTTP
-  bodies, command output. Size caps, timeouts, schema checks, argv-only execution, 0600 socket
-  with a uid check, and text rendered as text.
-- One OS permission: Accessibility, to read the selection. Microphone only if you record a voice.
-- The app is signed with the project's own long-lived certificate, not an Apple Developer ID, so
-  Accessibility grants survive updates. It is not notarized.
+- No telemetry, accounts, or cloud services. Network access occurs only for a URL Source the user
+  created or a model download the user approved.
+- Submitted text is never written to logs. Log entries carry request identifiers and sizes only.
+- All external input is treated as untrusted: deep links, imported Sources, socket requests, HTTP
+  responses, and command output. Enforced controls include size limits, timeouts, schema
+  validation, argument-list execution without a shell, a 0600 socket with a peer uid check, and
+  rendering text strictly as text.
+- One operating-system permission is required: Accessibility, to read the selection. Microphone
+  access is requested only when recording a voice.
+- The application is signed with the project's own long-lived certificate rather than an Apple
+  Developer ID, so Accessibility grants survive updates. It is not notarized.
 
-Trust boundaries and known limits: [docs/security.md](docs/security.md).
+Trust boundaries and known limitations: [docs/security.md](docs/security.md).
 
-## Requirements and install
+## Installation
 
-Requires an Apple Silicon Mac (M1 or later) running macOS 13 or newer. There is no Intel build.
+Requirements: an Apple Silicon Mac (M1 or later) running macOS 13 or newer. There is no Intel
+build.
 
-Once the first release is published:
+After the first release is published:
 
 ```bash
-brew install --cask jeremym/tap/speech-hub     # also puts `speak` on your PATH
+brew install --cask jeremym/tap/speech-hub     # also places `speak` on PATH
 ```
 
-Or download `SpeechHub-x.y.z.zip` from Releases and unzip into /Applications. Because the app is
-not notarized, macOS blocks the first launch:
+Alternatively, download `SpeechHub-x.y.z.zip` from Releases and move the application to
+/Applications. Because the app is not notarized, macOS blocks the first launch:
 
-1. Double-click Speech Hub once; dismiss the "cannot be opened" dialog.
-2. System Settings → Privacy & Security → scroll to Security → **Open Anyway** → confirm.
+1. Open Speech Hub once and dismiss the "cannot be opened" dialog.
+2. System Settings → Privacy & Security → Security → **Open Anyway** → confirm.
 
-Right-click → Open no longer bypasses Gatekeeper on macOS 15 and later. Terminal alternative:
-`xattr -dr com.apple.quarantine "/Applications/Speech Hub.app"`.
+On macOS 15 and later, right-click → Open no longer bypasses Gatekeeper. Terminal alternative:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Speech Hub.app"
+```
 
 ### Verifying a download
 
@@ -206,66 +229,74 @@ codesign -d -r- "/Applications/Speech Hub.app"    # must print:
 
 ### First run
 
-The onboarding wizard walks through five steps: the Accessibility permission, engine, voice,
-shortcuts, and the optional `speak` command. Every step is also in Preferences later.
+The onboarding wizard covers five steps: Accessibility permission, engine, voice, shortcuts, and
+the optional `speak` command. Each step is also available later in Preferences.
 
-## Build from source
+## Building from source
 
-Requirements: Rust (stable), Node 20+, pnpm, Xcode command line tools.
+Requirements: Rust (stable), Node 20 or later, pnpm, Xcode Command Line Tools.
 
 ```bash
 pnpm install
-scripts/fetch-models.sh        # downloads and hash-verifies the bundled models (~390 MB)
-pnpm tauri dev                 # run in dev mode (also builds the `speak` sidecar)
+scripts/fetch-models.sh        # download and hash-verify the bundled models (about 390 MB)
+pnpm tauri dev                 # development build; also builds the `speak` sidecar
 pnpm tauri build               # .app and .dmg in target/release/bundle
 cargo test                     # Rust tests
 pnpm test                      # frontend tests (Vitest)
-pnpm typecheck                 # tsc --noEmit
-cargo run --release -p speech-hub --example bench -- standard   # measure first-audio latency
+pnpm typecheck                 # TypeScript type check
+cargo run --release -p speech-hub --example bench -- standard   # first-audio latency benchmark
 ```
 
-For anything you intend to run for real, use `scripts/install-local.sh`. It builds a release,
-signs it with the release identity, installs to /Applications, and launches. A debug build has a
-hash-pinned signature, so each rebuild looks like a new app to macOS and loses the Accessibility
-grant. Run `scripts/create-release-cert.sh` once first to create the self-signed identity.
+For a build intended for real use, run `scripts/install-local.sh`. It produces a release build,
+signs it with the release identity, installs it to /Applications, and launches it. Debug builds
+carry a hash-pinned signature, so each rebuild appears to macOS as a new application and loses
+the Accessibility grant. Create the signing identity once with `scripts/create-release-cert.sh`.
 
-Release packaging: [docs/release.md](docs/release.md) (`scripts/build-release.sh`,
-`scripts/update-tap.sh`).
+Release packaging is documented in [docs/release.md](docs/release.md).
 
 ## Repository layout
 
 ```
 speech-hub/
 ├── src/                      # React + TypeScript UI: Reader, Quick Speak, Source Builder,
-│                             #   Mini player, Voices, Pronunciation Studio, Preferences, Onboarding
-├── src-tauri/                # Rust app: hub, engines, playback, sources, ipc, hotkeys,
-│   │                         #   accessibility, settings, services, deep links
-│   ├── resources/models/     # bundled Lite + Standard models (fetched by script, not committed)
+│                             #   mini player, Voices, Pronunciation Studio, Preferences, Onboarding
+├── src-tauri/                # Rust application: hub, engines, playback, sources, IPC, hotkeys,
+│   │                         #   accessibility, settings, Services menu, URL scheme
+│   ├── resources/models/     # bundled Lite and Standard models (fetched by script, not committed)
 │   └── Info.plist            # Services menu and URL scheme declarations
 ├── crates/
-│   ├── speechhub-protocol/   # request and response types shared by app and CLI
-│   └── speechhub-cli/        # builds `speak`
-├── scripts/                  # fetch-models, build-cli, install-local, build-release, create-release-cert, update-tap
-├── docs/                     # see below
+│   ├── speechhub-protocol/   # request and response types shared by the app and the CLI
+│   └── speechhub-cli/        # the `speak` command
+├── scripts/                  # model fetch, CLI build, local install, release build, signing, tap update
+├── docs/                     # reference documentation (see below)
 ├── PLAN.md                   # plan of record and milestone status
-└── CLAUDE.md                 # conventions for contributors and coding agents
+└── CLAUDE.md                 # project conventions
 ```
 
-Stack: Tauri 2 (Rust, edition 2024), React 19, TypeScript, Vite, Tailwind 4, sherpa-onnx, cpal.
+Stack: Tauri 2 (Rust, edition 2024), React 19, TypeScript, Vite, Tailwind CSS 4, sherpa-onnx,
+cpal.
 
 ## Documentation
 
-- [docs/public-api.md](docs/public-api.md): the `speak` command, socket protocol, `speechhub://` links
-- [docs/shortcuts.md](docs/shortcuts.md): Apple Shortcuts, Services menu, launchers, shell automation
-- [docs/sources.md](docs/sources.md): building Sources, kinds, limits, recipes
-- [docs/security.md](docs/security.md): trust boundaries and permissions
-- [docs/architecture.md](docs/architecture.md): process model, modules, selection capture
-- [docs/perf.md](docs/perf.md): measured latency, real-time factor, memory
-- [docs/model-licenses.md](docs/model-licenses.md): license of every bundled model and library
-- [docs/release.md](docs/release.md): signing and release runbook
-- [docs/testing.md](docs/testing.md): the hands-on test matrix
-- [docs/decisions.md](docs/decisions.md): why things are the way they are
-- [PLAN.md](PLAN.md): plan of record, milestones, backlog
+| Document | Contents |
+|---|---|
+| [docs/public-api.md](docs/public-api.md) | The `speak` command, socket protocol, `speechhub://` links |
+| [docs/shortcuts.md](docs/shortcuts.md) | Apple Shortcuts, Services menu, launchers, shell automation |
+| [docs/sources.md](docs/sources.md) | Source kinds, limits, approval model, recipes |
+| [docs/security.md](docs/security.md) | Trust boundaries and permissions |
+| [docs/architecture.md](docs/architecture.md) | Process model, modules, selection capture |
+| [docs/perf.md](docs/perf.md) | Measured latency, real-time factor, memory |
+| [docs/model-licenses.md](docs/model-licenses.md) | License of every bundled model and library |
+| [docs/release.md](docs/release.md) | Signing and release runbook |
+| [docs/testing.md](docs/testing.md) | Hands-on test matrix |
+| [docs/decisions.md](docs/decisions.md) | Design decisions and their rationale |
+| [PLAN.md](PLAN.md) | Plan of record, milestones, backlog |
+
+## Project status
+
+Pre-release. All features described above are implemented and verified on hardware. The first
+public release and the Homebrew cask are pending. Current milestone status and the backlog are
+tracked in [PLAN.md](PLAN.md).
 
 ## License
 
