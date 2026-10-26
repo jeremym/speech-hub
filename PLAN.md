@@ -2,7 +2,7 @@
 
 > Give anything on your Mac a voice. One local speech engine, shared by every app, script, and shortcut.
 
-Status: **M1–M6 built and verified end-to-end through the CLI** (2026-10-24). M7 (signing, notarization, DMG, CI) remains. Hands-on tests that need a human (Accessibility, hotkeys, windows) are deferred until after signing by design. See `docs/perf.md` for measured numbers. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
+Status: **M1–M7a built and verified on a real Mac** (2026-10-25): engines, CLI, Sources, pronunciation, Plus voices, self-signed release build, hands-on UI pass. M7b (GitHub repo, first release zip/DMG, Homebrew cask) remains. See `docs/perf.md` for measured numbers and `docs/testing.md` for the hands-on matrix. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
 
 ---
 
@@ -222,7 +222,6 @@ speech-hub/
 │   ├── speechhub-protocol/
 │   └── speechhub-cli/         # builds `speak`
 ├── scripts/                   # fetch-models.sh, verify-models.sh, bench.sh
-├── examples/                  # shell/, shortcuts/, integrations/
 ├── docs/                      # architecture, public-api, sources, security, model-licenses, perf, release
 ├── .context/                  # plans / handoff notes (gitignored)
 ├── CLAUDE.md  PLAN.md  README.md  LICENSE  package.json
