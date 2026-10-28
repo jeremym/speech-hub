@@ -63,7 +63,7 @@ export default function Wizard() {
       </div>
       <main className="scroll shell pane"><step.C wizard /></main>
       <footer className="wizard-foot">
-        <span className="step">{STEPS.map((s) => s.title).join(" · ")}</span>
+        <span className="step">{last ? "Every step is also in Preferences." : `Next: ${STEPS[i + 1].title}`}</span>
         {i > 0 && !last && <button className="quiet" onClick={() => setI(i - 1)}>Back</button>}
         {!last && i > 0 && <button className="quiet" onClick={finish}>Skip setup</button>}
         {last ? <button className="primary" onClick={finish}>Start using Speech Hub</button> : <button className="primary" onClick={() => setI(i + 1)}>Continue</button>}

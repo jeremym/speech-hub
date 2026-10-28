@@ -32,7 +32,7 @@ export default function MiniPlayer() {
         </div>
         {active && state !== "loading_source" && (
           <button className="icon" onClick={() => hub.togglePause()} aria-label={state === "paused" ? "Resume" : "Pause"} title={state === "paused" ? "Resume" : "Pause"}>
-            <Glyph name={state === "paused" ? "play" : "timer"} />
+            {state === "paused" ? <Glyph name="play" /> : <span className="mark" aria-hidden="true">❚❚</span>}
           </button>
         )}
         <button className="icon" onClick={dismiss} aria-label={active ? "Stop" : "Dismiss"} title={active ? "Stop" : "Dismiss"}>

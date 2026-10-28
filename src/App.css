@@ -90,6 +90,8 @@ button.keys.recording { color: var(--amber); border-color: var(--amber); box-sha
 .player button.icon, .palette button.icon { padding: 5px 8px; line-height: 1; border-color: var(--bezel); color: var(--phos-dim); display: inline-flex; align-items: center; }
 .player button.icon:hover:not(:disabled), .palette button.icon:hover:not(:disabled) { color: var(--phos); border-color: var(--phos-dim); }
 .player button.icon .glyph { width: 1.3em; height: 1.3em; }
+/* Pause has no glyph in the kit yet: a text mark in the body face, sized like a glyph. */
+.mark { font-family: var(--body); font-size: 0.9em; letter-spacing: -0.1em; display: inline-block; }
 
 /* Quick Speak: a prompt line, the matches as rows, one line of hints at the bottom. */
 .palette { height: 100%; display: flex; flex-direction: column; background: var(--ground-2); border: 1px solid var(--phos-dim); border-radius: var(--radius); box-shadow: 0 0 18px var(--halo-soft); overflow: hidden; }

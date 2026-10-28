@@ -46,7 +46,7 @@ export default function Reader() {
           <div className="reader-tools">
             <Logo size={24} word={false} />
             {busy && status?.state !== "paused" ? (
-              <button onClick={() => hub.pause()}><Glyph name="timer" /> Pause</button>
+              <button onClick={() => hub.pause()}><span className="mark" aria-hidden="true">❚❚</span> Pause</button>
             ) : status?.state === "paused" ? (
               <button className="primary" onClick={() => hub.resume()}><Glyph name="play" /> Resume</button>
             ) : (
