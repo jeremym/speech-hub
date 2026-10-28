@@ -2,7 +2,7 @@
 
 > Give anything on your Mac a voice. One local speech engine, shared by every app, script, and shortcut.
 
-Status: **M1–M7a built and verified on a real Mac** (2026-10-25): engines, CLI, Sources, pronunciation, Plus voices, self-signed release build, hands-on UI pass. M7b (GitHub repo, first release zip/DMG, Homebrew cask) remains. See `docs/perf.md` for measured numbers and `docs/testing.md` for the hands-on matrix. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
+Status: **M1–M7a built and verified on a real Mac** (2026-10-25); **UI restyled on the Overtone Foundry app kit, amber by default** (2026-10-28, see `docs/ui.md`): engines, CLI, Sources, pronunciation, Plus voices, self-signed release build, hands-on UI pass. M7b (GitHub repo, first release zip/DMG, Homebrew cask) remains. See `docs/perf.md` for measured numbers and `docs/testing.md` for the hands-on matrix. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
 
 ---
 
