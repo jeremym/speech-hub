@@ -1,6 +1,33 @@
 # Speech Hub
 
+**Version 0.1.0, pre-release.** Built for one person's daily use and tested against those use
+cases on their own Apple Silicon Macs, nothing wider. Everything runs locally; nothing leaves the
+machine unless you point a Source at a URL or approve a model download.
+
 Local text-to-speech for macOS, delivered as a menu-bar app and a shared speech service.
+
+**What sets it apart is that it hooks into whatever you already have.** Speech Hub is not a
+reader with one text box. It is a voice layer that reaches out to your own scripts and that any
+program can reach into:
+
+- **Sources reach out.** A Source runs your own command or script, an Apple Shortcut, or an HTTP
+  request, and speaks whatever comes back. A status script, a build log, a feed, a note file, the
+  clipboard: each becomes a keystroke or a menu entry. Anything executable is approved once,
+  explicitly, before it can run.
+- **Everything reaches in.** The `speak` command, a Unix socket, `speechhub://` links, and the
+  Services menu all feed the same voices, speed, and pronunciation rules, so a cron job, a
+  Makefile, Raycast, or a Shortcut speaks exactly like a highlighted paragraph does.
+
+<table>
+<tr>
+<td><img src="docs/screenshots/preferences-shortcuts.png" width="440" alt="Preferences, Shortcuts pane: Speak Selection and Quick Speak, each with its keys and what it does"></td>
+<td><img src="docs/screenshots/preferences-engine.png" width="440" alt="Preferences, Engine pane: Lite, Standard (chosen, in use) and the optional Plus download with its consent checkbox"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/preferences-general.png" width="440" alt="Preferences, General pane: theme and text size, background behaviour, mini player, browser readiness"></td>
+<td><img src="docs/screenshots/reader.png" width="440" alt="The Reader window: Speak, Stop, voice and speed above a paper sheet for pasted text"></td>
+</tr>
+</table>
 
 Speech Hub is a replacement for Apple's built-in Spoken Content feature (System Settings →
 Accessibility → Spoken Content, including the "Speak selection" shortcut) and for the `say`
@@ -234,7 +261,9 @@ the optional `speak` command. Each step is also available later in Preferences.
 
 ## Building from source
 
-Requirements: Rust (stable), Node 20 or later, pnpm, Xcode Command Line Tools.
+Requirements: Rust (stable), Node 20 or later, pnpm, Xcode Command Line Tools, and the
+`overtone-foundry-app-kit` repository checked out as a sibling folder (`package.json` links it
+from `../overtone-foundry-app-kit`; run `pnpm build` there once).
 
 ```bash
 pnpm install
@@ -273,8 +302,8 @@ speech-hub/
 └── CLAUDE.md                 # project conventions
 ```
 
-Stack: Tauri 2 (Rust, edition 2024), React 19, TypeScript, Vite, Tailwind CSS 4, sherpa-onnx,
-cpal.
+Stack: Tauri 2 (Rust, edition 2024), React 19, TypeScript, Vite, the Overtone Foundry app kit
+for the look (see [docs/ui.md](docs/ui.md)), sherpa-onnx, cpal.
 
 ## Documentation
 
@@ -290,12 +319,14 @@ cpal.
 | [docs/release.md](docs/release.md) | Signing and release runbook |
 | [docs/testing.md](docs/testing.md) | Hands-on test matrix |
 | [docs/decisions.md](docs/decisions.md) | Design decisions and their rationale |
+| [docs/ui.md](docs/ui.md) | The look: screens mapped to the app kit, setup, upstream wishes |
 | [PLAN.md](PLAN.md) | Plan of record, milestones, backlog |
 
 ## Project status
 
-Pre-release. All features described above are implemented and verified on hardware. The first
-public release and the Homebrew cask are pending. Current milestone status and the backlog are
+Version 0.1.0, pre-release. All features described above are implemented and verified on the
+author's own hardware and workflows; other setups are untested. The first public release and the
+Homebrew cask are pending. Current milestone status and the backlog are
 tracked in [PLAN.md](PLAN.md).
 
 ## License

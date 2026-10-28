@@ -5,7 +5,8 @@ terminal look shared with Stillroom. Dark glass, glowing text with a crisp core 
 bracketed fields, status words in small caps, and paper for anything the user reads as content.
 Speech Hub uses the kit's default theme, **green**, like Stillroom. Amber and paper remain
 selectable under Preferences › General › Look and in the View menu, and text size has three steps.
-The screenshots in `docs/screenshots/` were taken in amber, before the default changed to green.
+In `docs/screenshots/`, the `amber-*.png` set was taken before the default changed to green; the
+four unprefixed files (`preferences-*.png`, `reader.png`) are green and appear in the README.
 
 The kit's rules are in its `SKILL.md` (read it before changing any screen). The short version:
 glow is the kit's `.glow` classes, never a blur; body text is 17 px minimum; status is a word,
