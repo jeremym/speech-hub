@@ -3,8 +3,9 @@
 Speech Hub's windows are drawn with `@overtone-foundry/app-kit` (working name P1): the phosphor
 terminal look shared with Stillroom. Dark glass, glowing text with a crisp core and a soft halo,
 bracketed fields, status words in small caps, and paper for anything the user reads as content.
-Speech Hub defaults to the **amber** theme; Stillroom defaults to green. Green and paper remain
-selectable under Preferences › General › Look, and text size has three steps.
+Speech Hub uses the kit's default theme, **green**, like Stillroom. Amber and paper remain
+selectable under Preferences › General › Look and in the View menu, and text size has three steps.
+The screenshots in `docs/screenshots/` were taken in amber, before the default changed to green.
 
 The kit's rules are in its `SKILL.md` (read it before changing any screen). The short version:
 glow is the kit's `.glow` classes, never a blur; body text is 17 px minimum; status is a word,
@@ -16,8 +17,8 @@ popup is `Help`; nothing is fetched at run time.
 
 - `package.json`: `@overtone-foundry/app-kit` is linked from `../overtone-foundry-app-kit` (no
   remote yet). pnpm only. If the kit's `dist/` is missing, run `pnpm build` in the kit folder.
-- `src/main.tsx` imports `@overtone-foundry/app-kit/kit.css` and applies the saved look. On the
-  very first launch (no saved look) the theme is amber.
+- `src/main.tsx` imports `@overtone-foundry/app-kit/kit.css` and applies the saved look (`src/look.ts`).
+  With nothing saved the kit's default applies: green, normal size, no scanlines.
 - `src/App.css` is the only app CSS. It uses the kit's tokens and nothing else: no colours, no
   pixel font sizes.
 - `src/brand.tsx` holds the app's mark (the kit ships none) and the `Logo` wrapper.

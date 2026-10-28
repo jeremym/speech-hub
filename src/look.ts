@@ -7,12 +7,9 @@ import { applyLook, loadLook, stepSize, type Look } from "@overtone-foundry/app-
 
 export const LOOK_KEY = { key: "speechhub.look" };
 
-/** The saved look, or the app's default on the first launch: amber. */
+/** The saved look, or the kit's default on the first launch: green. */
 export function initialLook(): Look {
-  let saved = false;
-  try { saved = localStorage.getItem(LOOK_KEY.key) !== null; } catch { /* no storage: use the default */ }
-  const look = loadLook(LOOK_KEY);
-  return saved ? look : { ...look, theme: "amber" };
+  return loadLook(LOOK_KEY);
 }
 
 /** Apply a look in this window and tell the others. */

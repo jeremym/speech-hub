@@ -387,7 +387,7 @@ export function GeneralPane(_: PaneProps) {
       <Zone title="Look" sub="theme and text size">
         <div className="settings-row">
           <span className="label">Theme</span>
-          <Segmented label="Theme" value={look.theme} onChange={(theme) => changeLook({ theme })} options={[{ value: "amber", label: "Amber" }, { value: "green", label: "Green" }, { value: "paper", label: "Paper" }]} />
+          <Segmented label="Theme" value={look.theme} onChange={(theme) => changeLook({ theme })} options={[{ value: "green", label: "Green" }, { value: "amber", label: "Amber" }, { value: "paper", label: "Paper" }]} />
           <span className="label">Text size</span>
           <Segmented label="Text size" value={look.size} onChange={(size) => changeLook({ size })} options={[{ value: "normal", label: "Normal" }, { value: "larger", label: "Larger" }, { value: "largest", label: "Largest" }]} />
           <span className="label">Scanlines</span>

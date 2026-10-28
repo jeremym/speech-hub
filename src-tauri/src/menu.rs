@@ -41,8 +41,8 @@ pub fn install(app: &App) -> tauri::Result<()> {
         b.build(app)
     };
     let view = SubmenuBuilder::new(app, "View")
-        .item(&look("theme-amber", "Amber Theme", None)?)
         .item(&look("theme-green", "Green Theme", None)?)
+        .item(&look("theme-amber", "Amber Theme", None)?)
         .item(&look("theme-paper", "Paper Theme", None)?)
         .separator()
         .item(&look("text-larger", "Larger Text", Some("CmdOrCtrl+="))?)
