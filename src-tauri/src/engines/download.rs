@@ -194,7 +194,7 @@ fn sha256_of(path: &Path) -> Result<String, String> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 fn content_length(url: &str) -> Option<u64> {
