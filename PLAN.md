@@ -2,7 +2,7 @@
 
 > Give anything on your Mac a voice. One local speech engine, shared by every app, script, and shortcut.
 
-Status: **M1–M7a built and verified on a real Mac** (2026-10-25); **UI restyled on the Overtone Foundry app kit, green by default** (2026-10-28, see `docs/ui.md`): engines, CLI, Sources, pronunciation, Plus voices, self-signed release build, hands-on UI pass. M7b (GitHub repo, first release zip/DMG, Homebrew cask) remains. See `docs/perf.md` for measured numbers and `docs/testing.md` for the hands-on matrix. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
+Status: **M1–M7a built and verified on a real Mac** (2026-10-25); **UI restyled on the Overtone Foundry app kit, green by default** (2026-10-28, see `docs/ui.md`): engines, CLI, Sources, pronunciation, Plus voices, self-signed release build, hands-on UI pass. **M7b shipped 2026-10-28:** public repo, v0.1.0 release (signed zip + DMG, sha256), Homebrew cask `jeremym/tap/speech-hub` (also installs `speak`); cask install and zip install both verified on this Mac with the Accessibility grant intact. See `docs/perf.md` for measured numbers and `docs/testing.md` for the hands-on matrix. This document supersedes the earlier "SpeakLocal" spec draft; that draft's ideas are kept where they hold up and changed where noted in §1.
 
 ---
 
@@ -188,8 +188,8 @@ Pronunciation Studio (substitution rules, deterministic order, preview, import/e
 **M6 — Plus tier / cloning (Phase 6)** ✅ (download, verify, extract, engine, custom voices from WAV; microphone recording deferred)
 Pocket TTS via sherpa-onnx, download-on-demand with license + consent UI · reference-audio voice creation · local voice store. Ship only if real cloning works.
 
-**M7 — Release (Phase 7)** ⬜
-Signing + notarization · DMG · GitHub Actions (build + Rust/Vitest tests; native AX tests are manual, documented) · license notices (incl. espeak-ng GPL) · clean-machine verification · README for users / power users / developers.
+**M7 — Release (Phase 7)** ✅ (v0.1.0 released 2026-10-28; see `docs/release.md`)
+Signing (self-signed; notarization dropped by decision) · zip + DMG + sha256 · Homebrew cask in `jeremym/tap` · README for users / power users / developers. Not done, deferred: GitHub Actions CI (builds are local by design) and verification on a second, clean machine (only a clean-state reinstall on the dev Mac so far).
 
 **Later / research:** `AVSpeechSynthesisProviderAudioUnit` (macOS 13+, works with VoiceOver and Speak Screen — needs Swift app extension) · Services menu · Shortcuts actions · Intel universal build · optional queue mode.
 

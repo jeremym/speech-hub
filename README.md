@@ -232,11 +232,14 @@ Trust boundaries and known limitations: [docs/security.md](docs/security.md).
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 13 or newer. There is no Intel
 build.
 
-After the first release is published:
+Homebrew (recommended; the cask also removes the quarantine flag, so no Gatekeeper step):
 
 ```bash
 brew install --cask jeremym/tap/speech-hub     # also places `speak` on PATH
 ```
+
+Homebrew 7 asks you to trust third-party casks; it records `jeremym/tap/speech-hub` as trusted
+during the install.
 
 Alternatively, download `SpeechHub-x.y.z.zip` from Releases and move the application to
 /Applications. Because the app is not notarized, macOS blocks the first launch:
