@@ -22,6 +22,9 @@ popup is `Help`; nothing is fetched at run time.
   pixel font sizes.
 - `src/brand.tsx` holds the app's mark (the kit ships none) and the `Logo` wrapper.
 - Tailwind was removed: once the kit styles bare HTML, no utility class was left in use.
+- `vite.config.ts` dedupes React and Lucide (`resolve.dedupe`) because the linked kit has its own
+  `node_modules`; without it the kit's components run on a second React and every hook fails. The
+  dev server is also allowed to read the kit folder, where its fonts live.
 - Each window is its own webview, so a look change is broadcast on the Tauri event `look:changed`
   and every window applies it. The native View menu also switches theme and text size.
 
