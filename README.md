@@ -1,5 +1,9 @@
 # Speech Hub
 
+> ## Highlight text. Press ⌥⎋. Hear it read aloud in a natural voice.
+> **A drop-in replacement for the Mac's built-in "Speak selection" feature**, with neural
+> voices that run entirely on your machine.
+
 **Version 0.1.0, pre-release.** Built for one person's daily use and tested against those use
 cases on their own Apple Silicon Macs, nothing wider. Everything runs locally; nothing leaves the
 machine unless you point a Source at a URL or approve a model download.
