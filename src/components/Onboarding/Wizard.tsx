@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
+import { Progress } from "@overtone-foundry/app-kit";
 import { hub } from "../../services/hub";
+import { Logo } from "../../brand";
 import { AccessibilityPane, CliPane, EnginePane, HotkeysPane, VoicesPane } from "../Preferences/panes";
-import { Button, H1, Kbd, Lead } from "../ui";
+import { Head } from "../bits";
 
 function Welcome() {
   return (
     <div>
-      <H1>Welcome to Speech Hub</H1>
-      <Lead>Give anything on your Mac a voice.</Lead>
-      <ul className="space-y-3 text-[15px]">
-        <li><strong>Highlight text anywhere, press <Kbd>⌥⎋</Kbd>,</strong> and hear it read by a natural AI voice. That shortcut is called <strong>Speak Selection</strong>.</li>
+      <div className="row" style={{ marginBottom: 12 }}><Logo size={40} /></div>
+      <Head title="Welcome">Give anything on your Mac a voice.</Head>
+      <ul className="rows">
+        <li><strong>Highlight text anywhere, press <kbd>⌥⎋</kbd>,</strong> and hear it read by a natural AI voice. That shortcut is called <strong>Speak Selection</strong>.</li>
         <li><strong>Everything stays on this Mac.</strong> No account, no cloud, no telemetry.</li>
         <li><strong>Any app can speak through it.</strong> Scripts, Shortcuts, your clipboard manager, your own tools.</li>
         <li><strong>Build your own Sources</strong>: saved places to get text from, like your clipboard, a file, a command, or a web address. No code needed.</li>
       </ul>
-      <p className="text-[13px] text-[var(--muted)] mt-6">This short setup takes about a minute. Every step is also in Preferences later.</p>
+      <p className="dim" style={{ marginTop: 14 }}>This short setup takes about a minute. Every step is also in Preferences later.</p>
     </div>
   );
 }
@@ -22,11 +24,10 @@ function Welcome() {
 function Done() {
   return (
     <div>
-      <H1>You're set</H1>
-      <Lead>Speech Hub is running in your menu bar.</Lead>
-      <ul className="space-y-3 text-[15px]">
-        <li>Highlight some text in any app and press <Kbd>⌥⎋</Kbd> (Speak Selection).</li>
-        <li>Press <Kbd>⌥⇧⎋</Kbd> for Quick Speak: type text, run a Source, or open the Reader.</li>
+      <Head title="You're set">Speech Hub is running in your menu bar.</Head>
+      <ul className="rows">
+        <li>Highlight some text in any app and press <kbd>⌥⎋</kbd> (Speak Selection).</li>
+        <li>Press <kbd>⌥⇧⎋</kbd> for Quick Speak: type text, run a Source, or open the Reader.</li>
         <li>Click the waveform icon in the menu bar for everything else.</li>
       </ul>
     </div>
@@ -56,20 +57,16 @@ export default function Wizard() {
   }, []);
   const finish = () => hub.completeOnboarding().catch(() => {});
   return (
-    <div className="flex h-full flex-col">
-      <ol className="flex gap-1 px-6 pt-4">
-        {STEPS.map((s, idx) => (
-          <li key={s.id} className={`h-1.5 flex-1 rounded-full ${idx <= i ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`} aria-label={s.title} />
-        ))}
-      </ol>
-      <main className="flex-1 min-h-0 overflow-auto p-6"><step.C wizard /></main>
-      <footer className="flex items-center justify-between border-t border-[var(--border)] px-6 py-3">
-        <span className="text-[13px] text-[var(--muted)]">Step {i + 1} of {STEPS.length} · {step.title}</span>
-        <div className="flex gap-2">
-          {i > 0 && !last && <Button onClick={() => setI(i - 1)}>Back</Button>}
-          {!last && i > 0 && <Button variant="ghost" onClick={finish}>Skip setup</Button>}
-          {last ? <Button variant="primary" onClick={finish}>Start using Speech Hub</Button> : <Button variant="primary" onClick={() => setI(i + 1)}>Continue</Button>}
-        </div>
+    <div className="win">
+      <div className="wizard-head">
+        <Progress value={(i + 1) / STEPS.length} width={STEPS.length} label="Setup progress">step {i + 1} of {STEPS.length} · {step.title}</Progress>
+      </div>
+      <main className="scroll shell pane"><step.C wizard /></main>
+      <footer className="wizard-foot">
+        <span className="step">{STEPS.map((s) => s.title).join(" · ")}</span>
+        {i > 0 && !last && <button className="quiet" onClick={() => setI(i - 1)}>Back</button>}
+        {!last && i > 0 && <button className="quiet" onClick={finish}>Skip setup</button>}
+        {last ? <button className="primary" onClick={finish}>Start using Speech Hub</button> : <button className="primary" onClick={() => setI(i + 1)}>Continue</button>}
       </footer>
     </div>
   );
