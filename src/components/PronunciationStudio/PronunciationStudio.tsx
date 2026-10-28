@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { open as pickFile, save as pickSave } from "@tauri-apps/plugin-dialog";
+import { Empty, Glyph, Tag, Toggle, Zone } from "@overtone-foundry/app-kit";
 import { hub, errorMessage, useRules } from "../../services/hub";
 import type { Rule } from "../../types";
-import { Badge, Button, Card, H1, Lead, Toggle } from "../ui";
+import { ConfirmButton, Head } from "../bits";
 
 const blankRule = (matchText = ""): Rule => ({ id: "", matchText, replacement: "", wholeWord: true, caseSensitive: false, enabled: true, note: "", createdAt: 0 });
 
@@ -43,67 +44,74 @@ export default function PronunciationStudio() {
   const doImport = async () => {
     try { const p = await pickFile({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] }); if (p && !Array.isArray(p)) { const n = await hub.rules.importFrom(p); setMsg(`Imported ${n} rules.`); } } catch (e) { setMsg(errorMessage(e)); }
   };
-  const input = "rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5 text-[14px]";
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <div><H1>Pronunciation Studio</H1><Lead>A <strong>pronunciation rule</strong> is “written as → spoken as”. Teach Speech Hub how to say a name or a term once, and the fix applies to every app, Source, and the <code>speak</code> command. What you see in the Reader never changes; only what the engine hears.</Lead></div>
-        <div className="flex gap-2 shrink-0">
-          <Button variant="ghost" onClick={doImport}>Import…</Button>
-          <Button variant="ghost" onClick={doExport} disabled={rules.length === 0}>Export…</Button>
-          {!draft && <Button variant="primary" onClick={() => setDraft(blankRule())}>＋ Add rule</Button>}
-        </div>
-      </div>
+    <div>
+      <Head
+        title="Pronunciation Studio"
+        actions={<>
+          {!draft && <button className="primary" onClick={() => setDraft(blankRule())}><Glyph name="plus" /> Add rule</button>}
+          <button className="quiet" onClick={doImport}>Import…</button>
+          <button className="quiet" onClick={doExport} disabled={rules.length === 0}>Export…</button>
+        </>}
+      >
+        A <strong>pronunciation rule</strong> is “written as → spoken as”. Teach Speech Hub how to say a name or a term once, and the fix applies to every app, Source, and the <code>speak</code> command. What you see in the Reader never changes; only what the engine hears.
+      </Head>
 
-      <Card className="mb-3">
-        <div className="text-[13px] text-[var(--muted)] mb-1">Try it</div>
-        <div className="flex gap-2">
-          <input value={sample} onChange={(e) => setSample(e.target.value)} className={`${input} flex-1`} />
-          <Button onClick={speakSample}>▶ Speak</Button>
+      <Zone title="Try it" sub="live preview">
+        <div className="row field-row">
+          <div className="field"><label><strong>Sample</strong></label><input type="text" value={sample} onChange={(e) => setSample(e.target.value)} /></div>
+          <button onClick={speakSample}><Glyph name="play" /> Speak</button>
         </div>
-        <div className="mt-2 text-[13px]"><span className="text-[var(--muted)]">Engine hears: </span><span className="select-text">{spoken}</span></div>
-      </Card>
+        <div className="facts"><span className="label">Engine hears</span><span>{spoken}</span></div>
+      </Zone>
 
       {draft && (
-        <Card className="mb-3 border-[var(--accent)]/60">
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr]">
-            <input autoFocus value={draft.matchText} onChange={(e) => setDraft({ ...draft, matchText: e.target.value })} placeholder="Written as… (e.g. LangGraph)" className={input} onKeyDown={(e) => e.key === "Enter" && save()} />
-            <span className="self-center text-[var(--muted)]">→</span>
-            <input value={draft.replacement} onChange={(e) => setDraft({ ...draft, replacement: e.target.value })} placeholder="Spoken as… (e.g. Lang Graph)" className={input} onKeyDown={(e) => e.key === "Enter" && save()} />
+        <Zone className="editing" title={draft.id ? "Edit rule" : "New rule"}>
+          <div className="row field-row">
+            <div className="field"><label><strong>Written as</strong> (what appears in the text)</label><input type="text" autoFocus value={draft.matchText} onChange={(e) => setDraft({ ...draft, matchText: e.target.value })} placeholder="LangGraph" onKeyDown={(e) => e.key === "Enter" && save()} /></div>
+            <span className="disp dim">→</span>
+            <div className="field"><label><strong>Spoken as</strong> (what the engine says)</label><input type="text" value={draft.replacement} onChange={(e) => setDraft({ ...draft, replacement: e.target.value })} placeholder="Lang Graph" onKeyDown={(e) => e.key === "Enter" && save()} /></div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-[13px]">
-            <label className="flex items-center gap-2">Whole words only <Toggle checked={draft.wholeWord} onChange={(v) => setDraft({ ...draft, wholeWord: v })} /></label>
-            <label className="flex items-center gap-2">Match case <Toggle checked={draft.caseSensitive} onChange={(v) => setDraft({ ...draft, caseSensitive: v })} /></label>
-            <input value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="Note (optional)" className={`${input} flex-1 min-w-[160px] text-[13px]`} />
-            <span className="flex-1" />
-            <Button variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>
-            <Button variant="primary" onClick={save} disabled={!draft.matchText.trim()}>Save</Button>
+          <div className="row">
+            <span className="dim">Whole words only</span><Toggle label="Whole words only" on={draft.wholeWord} onChange={(v) => setDraft({ ...draft, wholeWord: v })} />
+            <span className="dim">Match case</span><Toggle label="Match case" on={draft.caseSensitive} onChange={(v) => setDraft({ ...draft, caseSensitive: v })} />
           </div>
-          <p className="text-[12px] text-[var(--muted)] mt-2">Tip: spell it the way you'd say it: “Lang Graph”, “sequel”, “en jin ex”. Hyphens add small pauses.</p>
-        </Card>
+          <div className="field"><label><strong>Note</strong> (optional)</label><input type="text" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></div>
+          <p className="dim">Tip: spell it the way you'd say it: “Lang Graph”, “sequel”, “en jin ex”. Hyphens add small pauses.</p>
+          <div className="row">
+            <button className="primary" onClick={save} disabled={!draft.matchText.trim()}>{draft.matchText.trim() ? "Save rule" : "Save · needs the written form"}</button>
+            <button className="quiet" onClick={() => setDraft(null)}>Cancel</button>
+          </div>
+        </Zone>
       )}
 
-      {msg && <p className="text-[13px] text-[var(--muted)] mb-2">{msg}</p>}
-      <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] divide-y divide-[var(--border)]">
-        {rules.length === 0 && <div className="p-4 text-[13px] text-[var(--muted)]">No rules yet. Add one, or select a word in the Reader and choose “Fix pronunciation”.</div>}
-        {rules.map((r) => (
-          <div key={r.id} className={`flex items-center gap-3 px-3 py-2 ${r.enabled ? "" : "opacity-55"}`}>
-            <button className="flex-1 min-w-0 text-left" onClick={() => setDraft({ ...r })}>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium font-mono text-[14px]">{r.matchText}</span>
-                <span className="text-[var(--muted)]">→</span>
-                <span className="font-medium">{r.replacement || <em className="text-[var(--muted)]">(silence)</em>}</span>
-                {!r.wholeWord && <Badge>partial</Badge>}
-                {r.caseSensitive && <Badge>case</Badge>}
-              </div>
-              {r.note && <div className="text-[12px] text-[var(--muted)] truncate">{r.note}</div>}
-            </button>
-            <Toggle checked={r.enabled} onChange={() => toggle(r)} />
-            <Button variant="ghost" onClick={() => del(r)} aria-label="Delete">✕</Button>
-          </div>
-        ))}
-      </div>
+      {msg && <p className="hint-line">{msg}</p>}
+      <Zone title="Rules" sub={`${rules.length} in the dictionary`}>
+        {rules.length === 0
+          ? <Empty word="No rules">Add one, or select a word in the Reader and choose “Fix pronunciation”.</Empty>
+          : (
+            <ul className="rows actions">
+              {rules.map((r) => (
+                <li key={r.id} className={r.enabled ? "" : "off"}>
+                  <span className="main">
+                    <button className="link" onClick={() => setDraft({ ...r })}><code>{r.matchText}</code></button>
+                    {" "}<span className="dim">→</span>{" "}
+                    <strong>{r.replacement || <em className="dim">(silence)</em>}</strong>
+                    {!r.wholeWord && <Tag>partial</Tag>}
+                    {r.caseSensitive && <Tag>case</Tag>}
+                    {!r.enabled && <Tag>off</Tag>}
+                    {r.note && <span className="sub">{r.note}</span>}
+                  </span>
+                  <span className="act">
+                    <Toggle label={`Rule ${r.matchText}`} on={r.enabled} onChange={() => toggle(r)} />
+                    <ConfirmButton onConfirm={() => del(r)} title="Delete this rule">Delete</ConfirmButton>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+      </Zone>
     </div>
   );
 }

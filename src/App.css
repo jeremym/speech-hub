@@ -1,0 +1,114 @@
+/* Speech Hub on the app kit. @overtone-foundry/app-kit owns the tokens, the elements, and the
+   components; this file owns the app's five small windows and the few pieces the kit does not
+   have yet (listed in docs/ui.md). Only kit tokens: no colours, no pixel font sizes. */
+
+html, body, #root { height: 100%; }
+body { overflow: hidden; user-select: none; }
+textarea, input, pre, code, .paper, .select { user-select: text; }
+[data-tauri-drag-region] { -webkit-app-region: drag; }
+[data-tauri-drag-region] button, [data-tauri-drag-region] input { -webkit-app-region: no-drag; }
+
+/* A window: a column that fills the webview; `.scroll` is the part that scrolls. */
+.win { display: flex; flex-direction: column; height: 100%; }
+.win > .scroll { flex: 1; min-height: 0; overflow: auto; }
+.win > .scroll.shell { padding-top: 18px; }
+.tagline { color: var(--phos-dim); margin: 0 0 14px; }
+.pane h1 { margin-bottom: 4px; }
+.pane-head { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.pane-head > div:first-child { flex: 1; min-width: 240px; }
+.pane-head .row { margin: 4px 0 0; flex: none; }
+.zone > p:first-child, .zone-head + p { color: var(--phos-dim); margin-bottom: 8px; }
+.zone .row:last-child { margin-bottom: 0; }
+
+/* A setting line: what it is on the left (with a hint), the control on the right. */
+.line { display: flex; gap: 16px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--bezel); }
+.line:first-child, .zone-head + .line, p + .line { border-top: 0; }
+.line-main { flex: 1; min-width: 0; }
+.line-main .hint { display: block; color: var(--phos-dim); font-size: var(--size-small); margin-top: 2px; }
+.line-act { flex: none; display: flex; align-items: center; gap: 8px; }
+.line-act select { max-width: 320px; }
+.line-act input[type="number"] { width: 5.5em; text-align: right; }
+input[type="range"] { accent-color: var(--phos); width: 130px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* Preferences: the kit's settings shell, scrolling inside the window. */
+.settings-shell.win-settings { height: 100%; overflow: auto; }
+.nav-group { font-family: var(--display); font-size: var(--size-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--phos-dim); padding: 12px 12px 2px; }
+.nav-group:first-child { padding-top: 2px; }
+
+/* Lists whose rows carry actions. */
+.rows.actions > li { display: flex; align-items: center; gap: 12px; }
+.rows.actions > li.off { color: var(--phos-dim); }
+.rows .main { flex: 1; min-width: 0; }
+.rows .main .sub { display: block; color: var(--phos-dim); font-size: var(--size-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rows .main .tag:first-child { margin-left: 0; }
+.rows .act { flex: none; display: flex; gap: 6px; align-items: center; }
+.src-icon { display: inline-block; width: 1.6em; text-align: center; flex: none; }
+
+/* A quality or speed meter: five cells in the display face. */
+.meter { font-family: var(--display); letter-spacing: 0.04em; }
+.meter .rest { color: var(--phos-faint); }
+
+/* Engine profiles: one full-width card each. */
+.engines { display: grid; gap: var(--gap); }
+.engines .card { min-height: 0; }
+.engines .card-title { flex-wrap: wrap; }
+.engines .card-title .tag { margin-left: 0; }
+.card-meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--phos-dim); font-size: var(--size-small); }
+.card-foot { border-top: 1px solid var(--bezel); padding-top: 10px; margin-top: 4px; }
+.card-foot .row:first-child { margin-top: 0; }
+
+/* The keys of a shortcut: a display-face button; amber while it listens for new keys. */
+button.keys { font-size: var(--size-display); min-width: 120px; letter-spacing: 0.16em; }
+button.keys.recording { color: var(--amber); border-color: var(--amber); box-shadow: 0 0 12px var(--amber-halo); font-size: var(--size-label); letter-spacing: 0.08em; }
+.check { display: inline-flex; align-items: center; gap: 8px; }
+.check .glyph { color: var(--phos-dim); }
+
+/* The onboarding wizard: a progress line at the top, the pane, a footer with the one next step. */
+.wizard-head { padding: 14px 24px 0; }
+.wizard-head .progress { font-size: var(--size-display); }
+.wizard-foot { display: flex; align-items: center; gap: 10px; padding: 10px 24px; border-top: 1px solid var(--bezel); }
+.wizard-foot .step { flex: 1; color: var(--phos-dim); font-size: var(--size-small); }
+
+/* The Reader: a Rail of controls, the text on paper, a status line. */
+.reader .rail-inner { gap: 10px; }
+.reader-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reader-tools select { width: auto; max-width: 200px; padding: 4px 28px 4px 8px; font-size: var(--size-small); }
+.reader-tools label { display: inline-flex; align-items: center; gap: 6px; color: var(--phos-dim); font-size: var(--size-small); }
+.reader .paper { flex: 1; min-height: 0; display: flex; margin: 12px 16px 0; padding: 18px 22px; }
+.reader .sheet { flex: 1; width: 100%; resize: none; border: 0; background: transparent; color: var(--ink); font: inherit; line-height: inherit; padding: 0; caret-color: var(--ink); }
+.reader .sheet:focus { box-shadow: none; }
+.reader .sheet::placeholder { color: var(--ink-dim); }
+.reader-foot { display: flex; justify-content: space-between; gap: 12px; padding: 6px 16px 8px; color: var(--phos-dim); font-size: var(--size-small); }
+
+/* The mini player: a small floating window with no shell. */
+.player { height: 100%; display: flex; flex-direction: column; background: var(--ground-2); border: 1px solid var(--phos-dim); border-radius: var(--radius); box-shadow: 0 0 14px var(--halo-soft); overflow: hidden; }
+.player-row { display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; height: 80px; flex: none; }
+.player-main { flex: 1; min-width: 0; }
+.player-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--size-small); }
+.player-notice { padding: 0 14px 10px; font-size: var(--size-small); line-height: 1.4; word-break: break-word; }
+.player button.icon, .palette button.icon { padding: 5px 8px; line-height: 1; border-color: var(--bezel); color: var(--phos-dim); display: inline-flex; align-items: center; }
+.player button.icon:hover:not(:disabled), .palette button.icon:hover:not(:disabled) { color: var(--phos); border-color: var(--phos-dim); }
+.player button.icon .glyph { width: 1.3em; height: 1.3em; }
+
+/* Quick Speak: a prompt line, the matches as rows, one line of hints at the bottom. */
+.palette { height: 100%; display: flex; flex-direction: column; background: var(--ground-2); border: 1px solid var(--phos-dim); border-radius: var(--radius); box-shadow: 0 0 18px var(--halo-soft); overflow: hidden; }
+.palette-input { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--bezel); flex: none; }
+.palette-input .prompt { font-family: var(--display); font-size: var(--size-display); color: var(--phos-dim); }
+.palette-input input { flex: 1; border: 0; background: transparent; padding: 6px 0; }
+.palette-input input:focus { box-shadow: none; }
+.palette-input kbd { color: var(--phos-dim); border-color: var(--bezel); }
+.palette-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; }
+.palette-list h3 { margin: 10px 14px 4px; }
+.palette-list .rows > li { padding: 0; }
+.palette-list .item { width: 100%; text-align: left; display: flex; gap: 12px; align-items: center; padding: 8px 14px; border: 0; border-radius: 0; font-family: var(--body); font-size: var(--size); letter-spacing: 0; text-transform: none; }
+.palette-list .item:hover:not(:disabled) { box-shadow: none; }
+.palette-list li.here .item { background: var(--phos-fill); box-shadow: inset 2px 0 0 var(--phos); text-shadow: 0 0 0 currentColor, 0 0 8px var(--halo); }
+.palette-list .item .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-list .item .hint { flex: none; color: var(--phos-dim); font-size: var(--size-small); max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-confirm { padding: 14px; flex: 1; overflow: auto; }
+.palette-foot { border-top: 1px solid var(--bezel); padding: 8px 14px; color: var(--phos-dim); font-size: var(--size-small); flex: none; }
+
+/* Facts with a wider label column, for the glossary. */
+.facts.wide { grid-template-columns: 170px 1fr; }
+.facts .ok { color: var(--phos); }

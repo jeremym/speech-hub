@@ -6,7 +6,7 @@
 //! fields have working cut/copy/paste/undo.
 
 use tauri::{
-    App,
+    App, Emitter,
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 
@@ -31,8 +31,25 @@ pub fn install(app: &App) -> tauri::Result<()> {
         .item(&quit)
         .build()?;
     let edit = SubmenuBuilder::new(app, "Edit").undo().redo().separator().cut().copy().paste().select_all().build()?;
+    // The look (theme and text size) lives in every webview; these items emit a `menu` event that
+    // the windows handle with the kit's applyLook (src/look.ts).
+    let look = |id: &str, text: &str, accel: Option<&str>| -> tauri::Result<tauri::menu::MenuItem<tauri::Wry>> {
+        let mut b = MenuItemBuilder::with_id(id, text);
+        if let Some(a) = accel {
+            b = b.accelerator(a);
+        }
+        b.build(app)
+    };
+    let view = SubmenuBuilder::new(app, "View")
+        .item(&look("theme-amber", "Amber Theme", None)?)
+        .item(&look("theme-green", "Green Theme", None)?)
+        .item(&look("theme-paper", "Paper Theme", None)?)
+        .separator()
+        .item(&look("text-larger", "Larger Text", Some("CmdOrCtrl+="))?)
+        .item(&look("text-smaller", "Smaller Text", Some("CmdOrCtrl+-"))?)
+        .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().separator().close_window().build()?;
-    let menu = MenuBuilder::new(app).items(&[&app_menu, &edit, &window]).build()?;
+    let menu = MenuBuilder::new(app).items(&[&app_menu, &edit, &view, &window]).build()?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| match event.id().as_ref() {
         CLOSE_ALL => {
@@ -44,6 +61,9 @@ pub fn install(app: &App) -> tauri::Result<()> {
         QUIT => {
             hub::get(app).stop();
             app.exit(0);
+        }
+        id if id.starts_with("theme-") || id.starts_with("text-") => {
+            let _ = app.emit("menu", id.to_string());
         }
         _ => {}
     });

@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { Glyph, type GlyphName } from "@overtone-foundry/app-kit";
+import { Logo } from "../../brand";
 import { AboutPane, AccessibilityPane, CliPane, EnginePane, GeneralPane, HotkeysPane, PronunciationPane, SourcesPane, VoicesPane } from "./panes";
 
 const PANES = [
-  { id: "general", label: "General", group: "App", C: GeneralPane },
-  { id: "accessibility", label: "Accessibility", group: "App", C: AccessibilityPane },
-  { id: "engine", label: "Engine", group: "Speech", C: EnginePane },
-  { id: "voices", label: "Voices", group: "Speech", C: VoicesPane },
-  { id: "pronunciation", label: "Pronunciation", group: "Speech", C: PronunciationPane },
-  { id: "hotkeys", label: "Shortcuts", group: "Ways to speak", C: HotkeysPane },
-  { id: "sources", label: "Sources", group: "Ways to speak", C: SourcesPane },
-  { id: "cli", label: "Command line", group: "Ways to speak", C: CliPane },
-  { id: "about", label: "About", group: "", C: AboutPane },
-] as const;
+  { id: "general", label: "General", group: "App", glyph: "settings", C: GeneralPane },
+  { id: "accessibility", label: "Accessibility", group: "App", glyph: "shield", C: AccessibilityPane },
+  { id: "engine", label: "Engine", group: "Speech", glyph: "models", C: EnginePane },
+  { id: "voices", label: "Voices", group: "Speech", glyph: "audio", C: VoicesPane },
+  { id: "pronunciation", label: "Pronunciation", group: "Speech", glyph: "text", C: PronunciationPane },
+  { id: "hotkeys", label: "Shortcuts", group: "Ways to speak", glyph: "key", C: HotkeysPane },
+  { id: "sources", label: "Sources", group: "Ways to speak", glyph: "in", C: SourcesPane },
+  { id: "cli", label: "Command line", group: "Ways to speak", glyph: "code", C: CliPane },
+  { id: "about", label: "About", group: "", glyph: "help", C: AboutPane },
+] as const satisfies readonly { id: string; label: string; group: string; glyph: GlyphName; C: (props: { wizard?: boolean }) => React.ReactNode }[];
 type PaneId = (typeof PANES)[number]["id"];
 
 export default function Preferences() {
@@ -37,21 +39,19 @@ export default function Preferences() {
   }, []);
   const Active = PANES.find((p) => p.id === pane)!.C;
   return (
-    <div className="flex h-full">
-      <nav className="w-[180px] shrink-0 border-r border-[var(--border)] bg-[var(--panel-2)]/60 p-3 pt-4 flex flex-col gap-0.5" aria-label="Preferences sections">
+    <div className="settings-shell win-settings">
+      <nav className="settings-nav" aria-label="Preferences sections">
+        <div className="settings-head"><Logo size={26} word={false} /><h1>Preferences</h1></div>
         {PANES.map((p, i) => (
-          <div key={p.id} className="contents">
-            {p.group !== (PANES[i - 1]?.group ?? null) && (
-              <div className={`px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] ${i > 0 ? "mt-3" : ""}`}>{p.group}</div>
-            )}
-            <button onClick={() => setPane(p.id)} aria-current={pane === p.id ? "page" : undefined}
-              className={`text-left rounded-lg px-3 py-1.5 text-[14px] ${pane === p.id ? "bg-[var(--accent)] text-white font-medium" : "hover:bg-[var(--panel-2)]"}`}>
-              {p.label}
+          <div key={p.id} style={{ display: "contents" }}>
+            {p.group !== (PANES[i - 1]?.group ?? null) && p.group && <div className="nav-group">{p.group}</div>}
+            <button onClick={() => setPane(p.id)} aria-current={pane === p.id ? "true" : undefined}>
+              <Glyph name={p.glyph} />{p.label}
             </button>
           </div>
         ))}
       </nav>
-      <main className="flex-1 min-w-0 overflow-auto p-6"><Active /></main>
+      <main className="pane"><Active /></main>
     </div>
   );
 }

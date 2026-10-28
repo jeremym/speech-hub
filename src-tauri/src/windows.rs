@@ -43,9 +43,9 @@ fn ensure(app: &AppHandle, label: &str) -> tauri::Result<tauri::WebviewWindow> {
     let url = WebviewUrl::App("index.html".into());
     let builder = WebviewWindowBuilder::new(app, label, url);
     let builder = match label {
-        ONBOARDING => builder.title("Welcome to Speech Hub").inner_size(760.0, 580.0).resizable(false).center(),
-        SETTINGS => builder.title("Speech Hub Preferences").inner_size(860.0, 620.0).min_inner_size(700.0, 480.0).center(),
-        READER => builder.title("Reader").inner_size(640.0, 480.0).min_inner_size(420.0, 300.0).center(),
+        ONBOARDING => builder.title("Welcome to Speech Hub").inner_size(820.0, 640.0).resizable(false).center(),
+        SETTINGS => builder.title("Speech Hub Preferences").inner_size(960.0, 680.0).min_inner_size(860.0, 560.0).center(),
+        READER => builder.title("Reader").inner_size(680.0, 500.0).min_inner_size(460.0, 320.0).center(),
         PALETTE => builder
             .title("Quick Speak")
             .inner_size(560.0, 420.0)
@@ -56,7 +56,7 @@ fn ensure(app: &AppHandle, label: &str) -> tauri::Result<tauri::WebviewWindow> {
             .center(),
         PLAYER => builder
             .title("Now Speaking")
-            .inner_size(340.0, 76.0)
+            .inner_size(340.0, 80.0)
             .resizable(false)
             .decorations(false)
             .always_on_top(true)
@@ -85,7 +85,7 @@ fn position_player(app: &AppHandle, window: &tauri::WebviewWindow) {
     if let Ok(Some(monitor)) = app.primary_monitor() {
         let size = monitor.size();
         let scale = monitor.scale_factor();
-        let (w, h) = ((340.0 * scale) as i32, (76.0 * scale) as i32);
+        let (w, h) = ((340.0 * scale) as i32, (80.0 * scale) as i32);
         let margin = (16.0 * scale) as i32;
         let menubar = (40.0 * scale) as i32;
         let x = monitor.position().x + size.width as i32 - w - margin;

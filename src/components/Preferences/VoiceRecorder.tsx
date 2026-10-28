@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Card } from "../ui";
+import { Glyph, Tag, Zone } from "@overtone-foundry/app-kit";
 
 /** Record a short reference clip with the Mac's microphone and hand back a 16-bit mono WAV.
  *  Capture only: the Hub owns all playback, so there is no preview here. */
@@ -61,25 +61,26 @@ export default function VoiceRecorder({ onDone, onCancel }: { onDone: (wav: Uint
 
   useEffect(() => () => { const s = session.current; if (s) { clearInterval(s.timer); s.stream.getTracks().forEach((t) => t.stop()); s.ctx.close().catch(() => {}); } }, []);
 
+  const cancel = () => {
+    const s = session.current;
+    if (s) { session.current = null; clearInterval(s.timer); s.node.disconnect(); s.stream.getTracks().forEach((t) => t.stop()); s.ctx.close().catch(() => {}); }
+    onCancel();
+  };
+
   return (
-    <Card className="mb-3 border-[var(--accent)]/60">
-      <div className="font-medium">Record a voice</div>
-      <p className="text-[13px] text-[var(--muted)] mt-1">Speak naturally for 10–20 seconds in a quiet room. Something like:</p>
-      <blockquote className="mt-1 rounded-lg bg-[var(--panel-2)] px-3 py-2 text-[13px] leading-snug select-text">
+    <Zone className="editing" title="Record a voice" aside={state === "recording" ? <Tag tone="live">recording · {seconds.toFixed(1)} s</Tag> : <Tag>up to {MAX_SECONDS} s</Tag>}>
+      <p>Speak naturally for 10–20 seconds in a quiet room. Something like:</p>
+      <blockquote className="paper" style={{ margin: "0 0 12px" }}>
         “The autumn leaves drifted across the quiet street while the kettle came to a boil. I set two cups on the table, opened the window a little, and listened to the rain begin.”
       </blockquote>
-      <div className="mt-3 flex items-center gap-3">
+      <div className="row">
         {state === "idle"
-          ? <Button variant="primary" onClick={start}>⏺ Start recording</Button>
-          : <Button variant="primary" onClick={stop}>■ Stop</Button>}
-        <span className={`tabular-nums text-[13px] ${state === "recording" ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}>
-          {state === "recording" ? `● ${seconds.toFixed(1)} s` : `up to ${MAX_SECONDS} s`}
-        </span>
-        <span className="flex-1" />
-        <Button variant="ghost" onClick={() => { if (session.current) { const s = session.current; session.current = null; clearInterval(s.timer); s.node.disconnect(); s.stream.getTracks().forEach((t) => t.stop()); s.ctx.close().catch(() => {}); } onCancel(); }}>Cancel</Button>
+          ? <button className="primary" onClick={start}><Glyph name="audio" /> Start recording</button>
+          : <button className="primary stop" onClick={stop}><Glyph name="stop" /> Stop</button>}
+        <button className="quiet" onClick={cancel}>Cancel</button>
       </div>
-      {err && <p className="mt-2 text-[13px] text-[var(--danger)]">{err}</p>}
-    </Card>
+      {err && <pre className="error">{err}</pre>}
+    </Zone>
   );
 }
 

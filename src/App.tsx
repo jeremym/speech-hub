@@ -7,6 +7,7 @@ import Reader from "./components/Reader/Reader";
 import MiniPlayer from "./components/Player/MiniPlayer";
 import Palette from "./components/QuickSpeak/Palette";
 import { hub } from "./services/hub";
+import { followLook } from "./look";
 
 /** One React bundle, several windows: the window label picks the screen. */
 export default function App() {
@@ -15,8 +16,6 @@ export default function App() {
     let l: WindowLabel = "settings";
     try { l = getCurrentWindow().label as WindowLabel; } catch { /* dev server outside Tauri */ }
     setLabel(l);
-    // Preferences get a larger type size; the other windows stay compact.
-    document.body.style.zoom = l === "settings" ? "1.15" : "";
     // ⌘, opens Preferences from any of our windows, like every Mac app.
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && !e.altKey && !e.ctrlKey && e.key === ",") {
@@ -25,7 +24,9 @@ export default function App() {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // The look is shared: a change in Preferences or the View menu reaches every window.
+    const unfollow = followLook(() => {});
+    return () => { window.removeEventListener("keydown", onKey); unfollow(); };
   }, []);
   switch (label) {
     case "onboarding": return <Wizard />;
